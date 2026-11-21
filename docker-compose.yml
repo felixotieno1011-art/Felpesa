@@ -36,23 +36,33 @@ services:
       timeout: 3s
       retries: 10
 
-  # api:
-  #   build: ./api
-  #   container_name: felpesa-api
-  #   depends_on:
-  #     db:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   environment:
-  #     DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}@db:5432/${POSTGRES_DB}
-  #     REDIS_URL: redis://redis:6379/0
-  #   env_file: .env
-  #   ports:
-  #     - "8001:8000"
-  #   volumes:
-  #     - ./api:/app
-  #   command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+  api:
+    build: ./api
+    container_name: felpesa-api
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Inside the compose network: host is "db" / "redis", not localhost.
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-felpesa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-felpesa_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-felpesa_dev}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET}
+      APP_ENV: ${APP_ENV:-dev}
+      APP_PORT: 8000
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    env_file:
+      - .env
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./api:/app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
 volumes:
   pgdata:
