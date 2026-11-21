@@ -1,0 +1,59 @@
+name: felpesa
+
+services:
+  db:
+    image: postgres:17
+    container_name: felpesa-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-felpesa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-felpesa_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-felpesa_dev}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: felpesa-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6380:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # api:
+  #   build: ./api
+  #   container_name: felpesa-api
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   environment:
+  #     DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}@db:5432/${POSTGRES_DB}
+  #     REDIS_URL: redis://redis:6379/0
+  #   env_file: .env
+  #   ports:
+  #     - "8001:8000"
+  #   volumes:
+  #     - ./api:/app
+  #   command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+volumes:
+  pgdata:
+  redisdata:
