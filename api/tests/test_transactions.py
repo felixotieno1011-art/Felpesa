@@ -10,39 +10,6 @@ from app.main import app
 from app.models import User, Wallet
 
 
-async def _purge_test_users() -> None:
-    async with SessionLocal() as db:
-        user_ids = list(
-            (await db.scalars(select(User.id).where(User.phone.like("+2547999%")))).all()
-        )
-        if not user_ids:
-            return
-        wallets = (
-            await db.scalars(select(Wallet).where(Wallet.user_id.in_(user_ids)))
-        ).all()
-        for w in wallets:
-            await db.delete(w)
-        await db.flush()
-        for uid in user_ids:
-            u = await db.get(User, uid)
-            if u is not None:
-                await db.delete(u)
-        await db.commit()
-
-
-@pytest.fixture
-async def client():
-    transport = ASGITransport(app=app)
-    async with app.router.lifespan_context(app):
-        async with AsyncClient(transport=transport, base_url="http://test") as c:
-            yield c
-
-
-@pytest.fixture
-async def cleanup_users():
-    await _purge_test_users()
-    yield
-    await _purge_test_users()
 
 
 async def _register_and_token(client, phone: str) -> str:

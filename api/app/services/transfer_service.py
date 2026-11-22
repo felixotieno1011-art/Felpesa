@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import audit
 from app.models import LedgerEntry, Transaction, Wallet
 
 
@@ -153,6 +154,24 @@ async def execute_transfer(
         txn.completed_at = func.now()
 
         await db.flush()
+
+        # Audit record is part of the same transaction as the transfer.
+        # If the transfer rolls back, this rolls back too — which is what
+        # makes the audit trail trustworthy.
+        await audit(
+            db,
+            actor_id=initiated_by,
+            action="transfer.initiated",
+            entity_type="transaction",
+            entity_id=txn.id,
+            metadata={
+                "amount": str(amount),
+                "currency": currency,
+                "from_wallet_id": str(from_w.id),
+                "to_wallet_id": str(to_w.id),
+            },
+        )
+
         await db.commit()
 
     except IntegrityError:

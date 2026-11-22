@@ -8,54 +8,8 @@ from app.main import app
 from app.models import User, Wallet
 
 
-@pytest.fixture
-async def client():
-    transport = ASGITransport(app=app)
-    async with app.router.lifespan_context(app):
-        async with AsyncClient(transport=transport, base_url="http://test") as c:
-            yield c
 
 
-async def _purge_test_users() -> None:
-    """Delete all test users (+ their wallets) with the +2547999% prefix.
-
-    Order matters: wallets FK to users with ON DELETE RESTRICT, so we must
-    delete wallets first. This is the same constraint the production code
-    depends on — it's not just here to satisfy the test, it's here to
-    demonstrate the RESTRICT is doing its job.
-    """
-    async with SessionLocal() as db:
-        user_ids = list(
-            (await db.scalars(select(User.id).where(User.phone.like("+2547999%")))).all()
-        )
-        if not user_ids:
-            return
-        wallets = (
-            await db.scalars(select(Wallet).where(Wallet.user_id.in_(user_ids)))
-        ).all()
-        for w in wallets:
-            await db.delete(w)
-        await db.flush()
-        for uid in user_ids:
-            u = await db.get(User, uid)
-            if u is not None:
-                await db.delete(u)
-        await db.commit()
-
-
-@pytest.fixture
-async def cleanup_users():
-    """Wipe test users before AND after each test. Idempotent.
-
-    Before: cleans up leftovers from a crashed earlier run.
-    After:  leaves a clean DB for the next test (or the next person who
-            runs pytest on this machine).
-
-    Running twice is cheap; running zero times on a dirty DB is expensive.
-    """
-    await _purge_test_users()
-    yield
-    await _purge_test_users()
 
 
 async def test_register_creates_user_and_wallet(client, cleanup_users):

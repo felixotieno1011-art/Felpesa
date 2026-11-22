@@ -82,22 +82,41 @@ async def purge_test_users() -> None:
 
 @pytest.fixture(autouse=True)
 async def _reset_pool() -> AsyncGenerator[None, None]:
-    """Dispose the asyncpg pool before AND after every test.
+    """Dispose the asyncpg + Redis pool before AND after every test.
 
     Why: pytest-asyncio creates a fresh event loop per test. Pooled
-    connections from the previous loop's engine cannot be used on the
-    new loop — asyncpg raises `RuntimeError: Task ... got Future ...
-    attached to a different loop`. Disposing between tests forces fresh
+    connections from the previous loop's engine/Redis client cannot be
+    used on the new loop. Disposing between tests forces fresh
     connections bound to the current loop.
 
-    Slight perf cost (~50ms/test) in exchange for cross-loop correctness.
+    - asyncpg via engine.dispose()
+    - Redis via resetting the module-level singleton
+
+    Costs ~100ms/test, buys cross-loop correctness.
     """
+    from app.core import redis as redis_module
+
     await engine.dispose()
+    # Reset Redis singleton so the next test creates a client bound to its loop
+    if redis_module._redis_client is not None:
+        try:
+            await redis_module._redis_client.aclose()
+        except Exception:
+            pass
+        redis_module._redis_client = None
+
     yield
+
     try:
         await engine.dispose()
     except Exception:
         pass
+    if redis_module._redis_client is not None:
+        try:
+            await redis_module._redis_client.aclose()
+        except Exception:
+            pass
+        redis_module._redis_client = None
 
 
 @pytest.fixture
