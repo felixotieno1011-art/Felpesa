@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audit
 from app.models import LedgerEntry, Transaction, Wallet
+from app.services import fraud_service
 
 
 class TransferError(Exception):
@@ -109,6 +110,9 @@ async def execute_transfer(
         if from_w.balance < amount:
             raise InsufficientFunds(f"Balance {from_w.balance} < amount {amount}")
 
+        # ---- Fraud evaluation (flag, not block) ----
+        flag = await fraud_service.evaluate(db, user_id=initiated_by, amount=amount)
+
         txn = Transaction(
             idempotency_key=idempotency_key,
             type="transfer",
@@ -119,7 +123,8 @@ async def execute_transfer(
             to_wallet_id=to_w.id,
             initiated_by=initiated_by,
             description=description,
-            flagged_fraud=False,
+            flagged_fraud=flag.flagged,
+            fraud_reason=flag.reason,
         )
         db.add(txn)
         await db.flush()
