@@ -1,0 +1,35 @@
+import { Navigate, Route, Routes } from "react-router-dom";
+import { useAuth } from "./auth";
+import Layout from "./components/Layout";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import SendMoney from "./pages/SendMoney";
+import History from "./pages/History";
+import Admin from "./pages/Admin";
+
+function Protected({ children }: { children: JSX.Element }) {
+  const { token } = useAuth();
+  if (!token) return <Navigate to="/login" replace />;
+  return children;
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route
+        element={
+          <Protected>
+            <Layout />
+          </Protected>
+        }
+      >
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/send" element={<SendMoney />} />
+        <Route path="/history" element={<History />} />
+        <Route path="/admin" element={<Admin />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
