@@ -112,6 +112,32 @@ async def execute_transfer(
         else:
             from_w, to_w = second_w, first_w
 
+        # Re-check idempotency AFTER acquiring the locks. The fast-path check
+        # above runs before the locks and can miss a concurrent duplicate that
+        # is currently in progress. Once we hold the locks, any competing
+        # transaction with the same key has either committed (→ we return it)
+        # or will commit later (→ it sees our transaction). This second check
+        # is what makes the transfer idempotent under real concurrency.
+        # Without it, a retry can hit "Insufficient funds" on a transfer that
+        # already succeeded, or double-send money.
+        winner = await db.scalar(
+            select(Transaction).where(
+                Transaction.initiated_by == initiated_by,
+                Transaction.idempotency_key == idempotency_key,
+            )
+        )
+        if winner is not None:
+            # Another request won the race while we waited for locks.
+            # Capture winner.id BEFORE any session operation — accessing
+            # attributes on an expired instance triggers lazy-load, which
+            # fails with MissingGreenlet in async context.
+            winner_id = winner.id
+            # Commit (not rollback) to release locks cleanly. With
+            # expire_on_commit=False (our session config), commit leaves
+            # `winner` fully populated and safe to serialize.
+            await db.commit()
+            return winner
+
         if from_w.id == to_w.id:
             raise SameWallet("Cannot transfer to self")
         if from_w.status != "active":
