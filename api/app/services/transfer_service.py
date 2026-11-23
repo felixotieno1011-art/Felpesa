@@ -48,7 +48,10 @@ async def _lock_wallet(db: AsyncSession, wallet_id: uuid.UUID) -> Wallet:
     that makes the concurrency test pass.
     """
     wallet = await db.scalar(
-        select(Wallet).where(Wallet.id == wallet_id).with_for_update()
+        select(Wallet)
+        .where(Wallet.id == wallet_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     if wallet is None:
         raise WalletNotFound(str(wallet_id))
@@ -90,8 +93,24 @@ async def execute_transfer(
     # The row locks (FOR UPDATE) are held from the first SELECT until commit,
     # which is what makes the concurrency test pass.
     try:
-        from_w = await _lock_wallet(db, from_wallet_id)
-        to_w = await _lock_wallet(db, to_wallet_id)
+        # Lock wallets in sorted-by-UUID order to prevent deadlock.
+        #
+        # Why this matters: if Alice→Bob and Bob→Alice run concurrently and
+        # each locks the sender first, you get:
+        #   Tx1: lock(Alice) → wait for Bob
+        #   Tx2: lock(Bob)   → wait for Alice
+        # Postgres detects the deadlock and kills one — the user sees a random
+        # 500. Sorting the lock order makes both transactions acquire locks
+        # in the same sequence, so one waits for the other instead of
+        # deadlocking. This is the canonical fix for row-level lock ordering.
+        first_id, second_id = sorted([from_wallet_id, to_wallet_id], key=str)
+        first_w = await _lock_wallet(db, first_id)
+        second_w = await _lock_wallet(db, second_id)
+
+        if from_wallet_id == first_id:
+            from_w, to_w = first_w, second_w
+        else:
+            from_w, to_w = second_w, first_w
 
         if from_w.id == to_w.id:
             raise SameWallet("Cannot transfer to self")
