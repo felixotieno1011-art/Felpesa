@@ -1,7 +1,7 @@
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, ForeignKey, Numeric, String, UniqueConstraint, text
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Numeric, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -12,7 +12,7 @@ class Wallet(Base, TimestampMixin):
     __tablename__ = "wallets"
     __table_args__ = (
         UniqueConstraint("user_id", "currency", name="uq_wallets_user_currency"),
-        CheckConstraint("balance >= 0", name="ck_wallets_balance_non_negative"),
+        CheckConstraint("is_system OR balance >= 0", name="ck_wallets_balance_non_negative"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -34,6 +34,9 @@ class Wallet(Base, TimestampMixin):
         nullable=False,
         default="active",
         server_default=text("'active'"),
+    )
+    is_system: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
     )
 
     user: Mapped["User"] = relationship(back_populates="wallets")  # noqa: F821

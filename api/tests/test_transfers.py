@@ -8,7 +8,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.core.db import SessionLocal
-from app.models import LedgerEntry, Wallet
+from app.models import LedgerEntry, Transaction, Wallet
 from app.services import transfer_service
 from tests.conftest import fund_wallet, register_user_and_wallet
 
@@ -171,3 +171,164 @@ async def test_for_update_blocks_concurrent_writers(client: AsyncClient):
 
     results = await asyncio.gather(hold_lock_briefly(), take_lock_measure())
     assert results[1] > 0.2, f"expected >0.2s wait, got {results[1]:.3f}s"
+
+
+async def test_concurrent_opposite_direction_transfers_no_deadlock(client: AsyncClient):
+    """A→B and B→A at the same time must both succeed, not deadlock.
+
+    Before the fix: both lock the sender first. Tx1 locks Alice, Tx2 locks
+    Bob. Each waits on the other. Postgres kills one → random 500.
+    After the fix: both lock in sorted UUID order, so one waits for the
+    other instead of deadlocking. Both transfers complete in sequence.
+
+    This is the canonical row-lock ordering test. If it passes, the transfer
+    service is safe under concurrent opposite-direction traffic.
+    """
+    _, a_wallet, token_a = await register_user_and_wallet(client, "+254799900800")
+    _, b_wallet, token_b = await register_user_and_wallet(client, "+254799900801")
+    await fund_wallet(a_wallet, "1000.0000")
+    await fund_wallet(b_wallet, "1000.0000")
+
+    # Barrier: verify funding is fully visible before the concurrent transfer.
+    # Without this, the transfer's lock query can race the fund commit
+    # (asyncpg + READ COMMITTED), causing the balance to read stale — a
+    # source of flaky test failures that aren't a bug in transfer_service.
+    async with SessionLocal() as db:
+        wa = await db.get(Wallet, uuid.UUID(a_wallet))
+        wb = await db.get(Wallet, uuid.UUID(b_wallet))
+        assert wa.balance == Decimal("1000.0000"), f"pre-transfer A={wa.balance}"
+        assert wb.balance == Decimal("1000.0000"), f"pre-transfer B={wb.balance}"
+
+    async def do_transfer(token: str, to_wallet: str, idem_suffix: str):
+        return await client.post(
+            "/transfers",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Idempotency-Key": f"deadlock-test-{idem_suffix}",
+            },
+            json={"to_wallet_id": to_wallet, "amount": "100.0000", "currency": "KES"},
+        )
+
+    # Fire A→B and B→A concurrently.
+    r_ab, r_ba = await asyncio.gather(
+        do_transfer(token_a, b_wallet, "ab"),
+        do_transfer(token_b, a_wallet, "ba"),
+    )
+
+    # Both must succeed. If the deadlock fires, one will be a 500.
+    assert r_ab.status_code == 201, f"A→B failed: {r_ab.status_code} {r_ab.text}"
+    assert r_ba.status_code == 201, f"B→A failed: {r_ba.status_code} {r_ba.text}"
+
+    # Both balances back where they started (each net ±0).
+    async with SessionLocal() as db:
+        a = await db.get(Wallet, uuid.UUID(a_wallet))
+        b = await db.get(Wallet, uuid.UUID(b_wallet))
+        assert a.balance == Decimal("1000.0000"), f"a={a.balance}"
+        assert b.balance == Decimal("1000.0000"), f"b={b.balance}"
+
+
+async def test_concurrent_opposite_direction_transfers_no_deadlock(client: AsyncClient):
+    """A→B and B→A at the same time must both succeed, not deadlock.
+
+    Before the fix: both lock the sender first. Tx1 locks Alice, Tx2 locks
+    Bob. Each waits on the other. Postgres kills one → random 500.
+    After the fix: both lock in sorted UUID order, so one waits for the
+    other instead of deadlocking. Both transfers complete in sequence.
+
+    This is the canonical row-lock ordering test. If it passes, the transfer
+    service is safe under concurrent opposite-direction traffic.
+    """
+    _, a_wallet, token_a = await register_user_and_wallet(client, "+254799900800")
+    _, b_wallet, token_b = await register_user_and_wallet(client, "+254799900801")
+    await fund_wallet(a_wallet, "1000.0000")
+    await fund_wallet(b_wallet, "1000.0000")
+
+    # Barrier: verify funding is fully visible before the concurrent transfer.
+    # Without this, the transfer's lock query can race the fund commit
+    # (asyncpg + READ COMMITTED), causing the balance to read stale — a
+    # source of flaky test failures that aren't a bug in transfer_service.
+    async with SessionLocal() as db:
+        wa = await db.get(Wallet, uuid.UUID(a_wallet))
+        wb = await db.get(Wallet, uuid.UUID(b_wallet))
+        assert wa.balance == Decimal("1000.0000"), f"pre-transfer A={wa.balance}"
+        assert wb.balance == Decimal("1000.0000"), f"pre-transfer B={wb.balance}"
+
+    async def do_transfer(token: str, to_wallet: str, idem_suffix: str):
+        return await client.post(
+            "/transfers",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Idempotency-Key": f"deadlock-test-{idem_suffix}",
+            },
+            json={"to_wallet_id": to_wallet, "amount": "100.0000", "currency": "KES"},
+        )
+
+    # Fire A→B and B→A concurrently.
+    r_ab, r_ba = await asyncio.gather(
+        do_transfer(token_a, b_wallet, "ab"),
+        do_transfer(token_b, a_wallet, "ba"),
+    )
+
+    # Both must succeed. If the deadlock fires, one will be a 500.
+    assert r_ab.status_code == 201, f"A→B failed: {r_ab.status_code} {r_ab.text}"
+    assert r_ba.status_code == 201, f"B→A failed: {r_ba.status_code} {r_ba.text}"
+
+    # Both balances back where they started (each net ±0).
+    async with SessionLocal() as db:
+        a = await db.get(Wallet, uuid.UUID(a_wallet))
+        b = await db.get(Wallet, uuid.UUID(b_wallet))
+        assert a.balance == Decimal("1000.0000"), f"a={a.balance}"
+        assert b.balance == Decimal("1000.0000"), f"b={b.balance}"
+
+
+async def test_concurrent_duplicate_idempotency_key_only_one_transfer(client: AsyncClient):
+    """Two concurrent requests with the SAME idempotency key must produce
+    exactly one transfer. Both callers get the SAME transaction ID.
+
+    Before the fix: both pass the fast-path idempotency check, one commits,
+    the other hits the post-lock validation with a now-depleted balance and
+    raises InsufficientFunds (wrong error) — OR, if the balance is still
+    sufficient, both transfers succeed (double-charge).
+
+    After the fix: the loser's post-lock idempotency re-check finds the
+    winner's transaction and returns it. Exactly one transfer moves money.
+    """
+    a_user, a_wallet, token = await register_user_and_wallet(client, "+254799900810")
+    _, b_wallet, _ = await register_user_and_wallet(client, "+254799900811")
+    await fund_wallet(a_wallet, "100.0000")
+
+    idem_key = str(uuid.uuid4())
+
+    async def attempt() -> tuple[int, dict | str]:
+        r = await client.post(
+            "/transfers",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Idempotency-Key": idem_key,
+            },
+            json={"to_wallet_id": b_wallet, "amount": "100.0000", "currency": "KES"},
+        )
+        try:
+            return r.status_code, r.json()
+        except Exception:
+            return r.status_code, r.text
+
+    # Fire both at the same time. Same token, same key, same body.
+    r1, r2 = await asyncio.gather(attempt(), attempt())
+
+    # Both must succeed (201) — the loser replays the winner's response.
+    assert r1[0] == 201, f"req1 failed: {r1}"
+    assert r2[0] == 201, f"req2 failed: {r2}"
+
+    # Both must return the SAME transaction ID — that's the idempotency proof.
+    txn_id_1 = r1[1]["id"] if isinstance(r1[1], dict) else None
+    txn_id_2 = r2[1]["id"] if isinstance(r2[1], dict) else None
+    assert txn_id_1 is not None and txn_id_2 is not None, f"missing id in response: {r1}, {r2}"
+    assert txn_id_1 == txn_id_2, f"different txns: {txn_id_1} vs {txn_id_2}"
+
+    # And the balances must reflect exactly ONE transfer, not two.
+    async with SessionLocal() as db:
+        a = await db.get(Wallet, uuid.UUID(a_wallet))
+        b = await db.get(Wallet, uuid.UUID(b_wallet))
+        assert a.balance == Decimal("0.0000"), f"sender A={a.balance}, expected 0"
+        assert b.balance == Decimal("100.0000"), f"receiver B={b.balance}, expected 100"

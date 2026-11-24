@@ -13,7 +13,7 @@ from decimal import Decimal
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.db import SessionLocal, engine
 from app.main import app
@@ -77,6 +77,30 @@ async def purge_test_users() -> None:
             u = await db.get(User, uid)
             if u is not None:
                 await db.delete(u)
+        await db.flush()
+
+        # Recompute the clearing wallet's cached balance from remaining ledger
+        # entries. Cleanup deletes both sides of each deposit/withdrawal
+        # transaction, but the clearing wallet's `balance` field doesn't
+        # auto-update. Without this reset, cache drift accumulates and
+        # reconciliation reports false positives.
+        from app.models import LedgerEntry as LE
+        clearing = await db.scalar(
+            select(Wallet).where(Wallet.is_system.is_(True), Wallet.currency == "KES")
+        )
+        if clearing is not None:
+            credit = await db.scalar(
+                select(func.coalesce(func.sum(LE.amount), 0)).where(
+                    LE.wallet_id == clearing.id, LE.direction == "credit"
+                )
+            )
+            debit = await db.scalar(
+                select(func.coalesce(func.sum(LE.amount), 0)).where(
+                    LE.wallet_id == clearing.id, LE.direction == "debit"
+                )
+            )
+            clearing.balance = Decimal(str(credit)) - Decimal(str(debit))
+
         await db.commit()
 
 
@@ -171,35 +195,31 @@ async def register_and_login(
 
 
 async def fund_wallet(wallet_id: str, amount: str) -> None:
+    """Test-only: fund a wallet via the deposit path (double-entry against clearing).
+
+    Replaces the old single-sided insert with a balanced deposit so that
+    reconciliation sees every transaction with 2 sides summing to zero.
+
+    In production, deposits come from external payment sources (M-Pesa,
+    bank transfer). In tests, we call the deposit service directly to skip
+    the HTTP layer for speed, but the code path is identical.
+    """
+    from app.services.deposit_service import deposit as deposit_service_call
     async with SessionLocal() as db:
         w = await db.get(Wallet, uuid.UUID(wallet_id))
         if w is None:
             raise AssertionError(f"fund_wallet: wallet {wallet_id} not found")
         amt = Decimal(amount)
-        txn = Transaction(
-            idempotency_key=f"seed-{uuid.uuid4()}",
-            type="deposit",
-            status="completed",
-            amount=amt,
-            currency="KES",
-            from_wallet_id=None,
+        await deposit_service_call(
+            db,
+            user_id=w.user_id,
             to_wallet_id=w.id,
-            initiated_by=w.user_id,
+            amount=amt,
+            currency=w.currency,
+            idempotency_key=f"seed-{uuid.uuid4()}",
+            daily_limit=Decimal("0"),  # no limit in tests
             description="test seed",
         )
-        db.add(txn)
-        await db.flush()
-        db.add(
-            LedgerEntry(
-                transaction_id=txn.id,
-                wallet_id=w.id,
-                direction="credit",
-                amount=amt,
-                balance_after=w.balance + amt,
-            )
-        )
-        w.balance = w.balance + amt
-        await db.commit()
 
 
 async def register_user_and_wallet(
