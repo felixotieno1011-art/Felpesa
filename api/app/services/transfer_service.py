@@ -68,6 +68,7 @@ async def execute_transfer(
     currency: str,
     idempotency_key: str,
     description: str | None = None,
+    txn_type: str = "transfer",
 ) -> Transaction:
     """Execute a transfer atomically. Returns the transaction (new or replayed).
 
@@ -160,7 +161,7 @@ async def execute_transfer(
 
         txn = Transaction(
             idempotency_key=idempotency_key,
-            type="transfer",
+            type=txn_type,
             status="pending",
             amount=amount,
             currency=currency,

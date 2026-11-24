@@ -20,3 +20,4 @@ __all__ = [
     "User",
     "Wallet",
 ]
+from app.models.merchant import Merchant  # noqa: F401

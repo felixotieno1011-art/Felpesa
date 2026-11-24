@@ -86,6 +86,12 @@ async def purge_test_users() -> None:
             (await db.scalars(select(Wallet.id).where(Wallet.user_id.in_(user_ids)))).all()
         )
         if wallet_ids:
+            from app.models import Merchant as _M
+            for m in (await db.scalars(
+                select(_M).where(_M.wallet_id.in_(wallet_ids))
+            )).all():
+                await db.delete(m)
+            await db.flush()
             txn_ids = list(
                 (await db.scalars(
                     select(Transaction.id).where(

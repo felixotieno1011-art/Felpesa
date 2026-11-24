@@ -31,70 +31,110 @@ export default function Login() {
       setToken(tok.access_token);
       nav("/");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="container" style={{ maxWidth: 400, marginTop: 80 }}>
-      <div className="card">
-        <h1>Felpesa</h1>
-        <p className="muted">
-          {mode === "login" ? "Sign in to your wallet" : "Create a wallet"}
-        </p>
+    <div className="auth-page">
+      <div className="auth-card">
+        <div className="auth-brand">
+          <div className="auth-logo">₣</div>
+          <div className="auth-title">Felpesa</div>
+          <div className="auth-tagline">Mobile money, secured</div>
+        </div>
+
         <form onSubmit={submit}>
-          <label>Phone</label>
+          <label htmlFor="phone">Phone</label>
           <input
+            id="phone"
+            type="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="+254712345678"
             required
+            autoComplete="tel"
           />
+
           {mode === "register" && (
             <>
-              <label>Full name</label>
+              <label htmlFor="full_name">Full name</label>
               <input
+                id="full_name"
+                type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
+                placeholder="Your name"
                 minLength={2}
                 required
+                autoComplete="name"
               />
             </>
           )}
-          <label>Password</label>
+
+          <label htmlFor="password">Password</label>
           <input
+            id="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            placeholder="At least 8 characters"
             minLength={8}
             required
+            autoComplete={mode === "login" ? "current-password" : "new-password"}
           />
+
           {error && <div className="error">{error}</div>}
-          <button type="submit" className="primary" style={{ width: "100%", marginTop: 8 }} disabled={busy}>
-            {busy ? "..." : mode === "login" ? "Sign in" : "Create account"}
+
+          <button
+            type="submit"
+            className="primary"
+            style={{ width: "100%", marginTop: 8 }}
+            disabled={busy}
+          >
+            {busy
+              ? mode === "login"
+                ? "Signing in…"
+                : "Creating account…"
+              : mode === "login"
+              ? "Sign in"
+              : "Create account"}
           </button>
         </form>
-        <p className="muted" style={{ marginTop: 16, textAlign: "center" }}>
+
+        <div className="auth-toggle">
           {mode === "login" ? (
-            <button
-              type="button"
-              style={{ border: "none", background: "none", color: "#0070f3", padding: 0 }}
-              onClick={() => setMode("register")}
-            >
-              Create an account
-            </button>
+            <>
+              New to Felpesa?{" "}
+              <button
+                type="button"
+                className="link"
+                onClick={() => {
+                  setMode("register");
+                  setError("");
+                }}
+              >
+                Create an account
+              </button>
+            </>
           ) : (
-            <button
-              type="button"
-              style={{ border: "none", background: "none", color: "#0070f3", padding: 0 }}
-              onClick={() => setMode("login")}
-            >
-              Back to sign in
-            </button>
+            <>
+              Already have an account?{" "}
+              <button
+                type="button"
+                className="link"
+                onClick={() => {
+                  setMode("login");
+                  setError("");
+                }}
+              >
+                Sign in
+              </button>
+            </>
           )}
-        </p>
+        </div>
       </div>
     </div>
   );
