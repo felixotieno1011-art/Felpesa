@@ -10,7 +10,7 @@ from app.core.rate_limit import RateLimitExceeded, check_rate_limit
 from app.core.redis import get_redis
 from app.deps import CurrentUser, SessionDep
 from app.schemas.transaction import TransactionOut
-from app.services import payment_service, transfer_service, wallet_service
+from app.services import message_service, payment_service, transfer_service, wallet_service
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 settings = get_settings()
@@ -68,7 +68,10 @@ async def _pay(kind, payload, user, db, redis_client, idem):
         raise HTTPException(422, str(e))
     except transfer_service.WalletNotFound:
         raise HTTPException(404, "Wallet not found")
-    return TransactionOut.model_validate(txn)
+    out = TransactionOut.model_validate(txn)
+    msgs = await message_service.build_messages(db, [txn], wallet.id)
+    out.message = msgs.get(txn.id)
+    return out
 
 
 @router.post("/paybill", response_model=TransactionOut, status_code=201)

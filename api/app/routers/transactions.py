@@ -11,7 +11,7 @@ from app.schemas.transaction import (
     TransactionListResponse,
     TransactionOut,
 )
-from app.services import transaction_service
+from app.services import message_service, transaction_service, wallet_service
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
@@ -32,19 +32,19 @@ async def list_my_transactions(
             type=type, status=status, direction=direction, flagged_fraud=flagged_fraud  # type: ignore[arg-type]
         )
     except ValidationError as e:
-        # Bad query-param value (e.g. ?type=foo) — return 422 not 500.
-        # Pydantic's ValidationError is not caught by FastAPI when constructed
-        # manually (only automatic schema validation is). Wrapping it as
-        # HTTPException(422) preserves the OpenAPI response contract.
-        raise HTTPException(
-            status_code=422,
-            detail=e.errors(),
-        )
+        raise HTTPException(status_code=422, detail=e.errors())
     items, total = await transaction_service.list_transactions(
         db, user_id=user.id, filters=filters, limit=limit, offset=offset
     )
+    wallet = await wallet_service.get_wallet_for_user(db, user_id=user.id)
+    msgs = await message_service.build_messages(db, list(items), wallet.id if wallet else None)
+    outs = []
+    for t in items:
+        o = TransactionOut.model_validate(t)
+        o.message = msgs.get(t.id)
+        outs.append(o)
     return TransactionListResponse(
-        items=[TransactionOut.model_validate(t) for t in items],
+        items=outs,
         meta=PageMeta(total=total, limit=limit, offset=offset),
     )
 
@@ -60,4 +60,8 @@ async def get_transaction(
     )
     if txn is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
-    return TransactionOut.model_validate(txn)
+    wallet = await wallet_service.get_wallet_for_user(db, user_id=user.id)
+    msgs = await message_service.build_messages(db, [txn], wallet.id if wallet else None)
+    out = TransactionOut.model_validate(txn)
+    out.message = msgs.get(txn.id)
+    return out

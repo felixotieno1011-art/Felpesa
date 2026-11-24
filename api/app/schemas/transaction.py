@@ -42,6 +42,7 @@ class TransactionOut(BaseModel):
     fraud_reason: str | None
     created_at: datetime
     completed_at: datetime | None
+    message: str | None = None
 
 
 class TransactionListResponse(Paginated[TransactionOut]):
@@ -51,7 +52,7 @@ class TransactionListResponse(Paginated[TransactionOut]):
 
 class TransactionFilter(BaseModel):
     """Query-string filters for GET /transactions. All optional."""
-    type: Literal["transfer", "deposit", "withdrawal"] | None = None
+    type: Literal["transfer", "deposit", "withdrawal", "paybill", "buygoods"] | None = None
     status: Literal["pending", "completed", "failed", "reversed"] | None = None
     direction: Literal["in", "out"] | None = None  # in=incoming, out=outgoing
     flagged_fraud: bool | None = None
