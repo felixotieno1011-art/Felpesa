@@ -2,6 +2,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import ValidationError
 
 from app.deps import CurrentUser, SessionDep
 from app.schemas.common import PageMeta
@@ -26,9 +27,19 @@ async def list_my_transactions(
     direction: Annotated[str | None, Query()] = None,
     flagged_fraud: Annotated[bool | None, Query()] = None,
 ) -> TransactionListResponse:
-    filters = TransactionFilter(
-        type=type, status=status, direction=direction, flagged_fraud=flagged_fraud  # type: ignore[arg-type]
-    )
+    try:
+        filters = TransactionFilter(
+            type=type, status=status, direction=direction, flagged_fraud=flagged_fraud  # type: ignore[arg-type]
+        )
+    except ValidationError as e:
+        # Bad query-param value (e.g. ?type=foo) — return 422 not 500.
+        # Pydantic's ValidationError is not caught by FastAPI when constructed
+        # manually (only automatic schema validation is). Wrapping it as
+        # HTTPException(422) preserves the OpenAPI response contract.
+        raise HTTPException(
+            status_code=422,
+            detail=e.errors(),
+        )
     items, total = await transaction_service.list_transactions(
         db, user_id=user.id, filters=filters, limit=limit, offset=offset
     )

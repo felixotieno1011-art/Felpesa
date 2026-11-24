@@ -1,7 +1,8 @@
 import uuid
+from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, Numeric, String, text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Numeric, String, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -43,3 +44,11 @@ class LedgerEntry(Base, TimestampMixin):
     balance_after: Mapped[Decimal] = mapped_column(Numeric(19, 4), nullable=False)
 
     transaction: Mapped["Transaction"] = relationship(back_populates="ledger_entries")  # noqa: F821
+
+    # Override created_at from TimestampMixin to use clock_timestamp() instead
+    # of now(). See migration 0004 for rationale.
+    created_at: Mapped["datetime"] = mapped_column(  # type: ignore[assignment]
+        DateTime(timezone=True),
+        server_default=text("clock_timestamp()"),
+        nullable=False,
+    )

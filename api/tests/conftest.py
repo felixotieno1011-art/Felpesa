@@ -1,17 +1,55 @@
 """Shared pytest fixtures for Felpesa tests.
 
-Async SQLAlchemy + pytest-asyncio note:
-  Each pytest-asyncio test runs in its OWN event loop. A shared asyncpg
-  connection pool cannot be reused across loops — futures/pending
-  operations bind to the loop that created them. The fix is to dispose
-  the engine before and after every test so each test starts with a
-  fresh pool bound to its own loop.
+IMPORTANT: this module loads `.env.test` BEFORE importing app modules so
+that `app.core.config.get_settings()` sees the TEST database URL, not the
+dev one. Without this, tests would run against `felpesa_dev` and cleanup
+could delete dev data. The load order is:
+  1. load `.env.test` → env vars set
+  2. import app.core.config → reads env, builds Settings
+  3. import app.models etc. → uses Settings
 """
+
+import pytest
+import os
+import subprocess
+from pathlib import Path as _Path
+
+_env_test = _Path(__file__).resolve().parent.parent.parent / ".env.test"
+if _env_test.exists():
+    with open(_env_test) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _, _v = _line.partition("=")
+                os.environ[_k.strip()] = _v.strip()
+
 import uuid
 from collections.abc import AsyncGenerator
 from decimal import Decimal
 
-import pytest
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _migrate_test_db():
+    """Run `alembic upgrade head` against the test DB once per session.
+
+    The test DB (felpesa_test) is created externally (one-time setup).
+    This fixture ensures it has the current schema before any test runs.
+    """
+    result = subprocess.run(
+        ["alembic", "upgrade", "head"],
+        cwd="/app",
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"alembic upgrade failed:\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
+        )
+    yield
+
+
+
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
 

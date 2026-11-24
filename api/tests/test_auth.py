@@ -97,3 +97,18 @@ async def test_protected_route_with_bad_token_returns_401(client):
         headers={"Authorization": "Bearer this.is.not.a.jwt"},
     )
     assert r.status_code == 401
+
+
+async def test_concurrent_duplicate_register_returns_409(client: AsyncClient):
+    """Two concurrent registers with same phone: exactly one 201, one 409."""
+    phone = "+254799900910"
+
+    async def attempt():
+        return await client.post(
+            "/auth/register",
+            json={"phone": phone, "full_name": "Race User", "password": "hunter2hunter2"},
+        )
+
+    r1, r2 = await __import__("asyncio").gather(attempt(), attempt())
+    statuses = sorted([r1.status_code, r2.status_code])
+    assert statuses == [201, 409], f"got {statuses}: {r1.text} / {r2.text}"

@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.main import app
+from tests.conftest import register_and_login
 from app.models import User, Wallet
 
 
@@ -41,3 +42,13 @@ async def test_transaction_get_not_found(client, cleanup_users):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 404
+
+
+async def test_invalid_filter_returns_422(client: AsyncClient):
+    """Bad ?type= value must return 422, not 500."""
+    _, token = await register_and_login(client, "+254799900900")
+    r = await client.get(
+        "/transactions?type=foo",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 422, f"expected 422, got {r.status_code}: {r.text}"

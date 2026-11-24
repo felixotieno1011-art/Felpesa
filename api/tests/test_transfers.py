@@ -332,3 +332,15 @@ async def test_concurrent_duplicate_idempotency_key_only_one_transfer(client: As
         b = await db.get(Wallet, uuid.UUID(b_wallet))
         assert a.balance == Decimal("0.0000"), f"sender A={a.balance}, expected 0"
         assert b.balance == Decimal("100.0000"), f"receiver B={b.balance}, expected 100"
+
+
+async def test_ledger_created_at_uses_clock_timestamp(client: AsyncClient):
+    """ledger_entries.created_at defaults to clock_timestamp(), not now()."""
+    from sqlalchemy import text as sql_text
+    async with SessionLocal() as db:
+        row = (await db.execute(sql_text(
+            "SELECT column_default FROM information_schema.columns "
+            "WHERE table_name='ledger_entries' AND column_name='created_at'"
+        ))).scalar()
+    assert row is not None
+    assert "clock_timestamp" in row.lower(), f"expected clock_timestamp, got {row}"

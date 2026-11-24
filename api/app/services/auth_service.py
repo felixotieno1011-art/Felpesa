@@ -2,6 +2,7 @@
 from decimal import Decimal
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audit
@@ -30,31 +31,39 @@ async def register_user(
     if existing is not None:
         raise UserAlreadyExists(phone)
 
-    user = User(phone=phone, full_name=full_name, password_hash=hash_password(password))
-    db.add(user)
-    await db.flush()
+    try:
+        user = User(phone=phone, full_name=full_name, password_hash=hash_password(password))
+        db.add(user)
+        await db.flush()
 
-    wallet = Wallet(
-        user_id=user.id,
-        currency="KES",
-        balance=Decimal("0"),
-        status="active",
-    )
-    db.add(wallet)
-    await db.flush()
+        wallet = Wallet(
+            user_id=user.id,
+            currency="KES",
+            balance=Decimal("0"),
+            status="active",
+        )
+        db.add(wallet)
+        await db.flush()
 
-    await audit(
-        db,
-        actor_id=user.id,
-        action="auth.register",
-        entity_type="user",
-        entity_id=user.id,
-        metadata={"phone": phone, "wallet_id": str(wallet.id)},
-        ip_address=ip_address,
-        user_agent=user_agent,
-    )
+        await audit(
+            db,
+            actor_id=user.id,
+            action="auth.register",
+            entity_type="user",
+            entity_id=user.id,
+            metadata={"phone": phone, "wallet_id": str(wallet.id)},
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
 
-    await db.commit()
+        await db.commit()
+    except IntegrityError:
+        # Race: another request registered the same phone between our
+        # pre-check and our INSERT. The unique constraint fires here — re-raise
+        # as UserAlreadyExists so the router returns 409 (same as pre-check path).
+        await db.rollback()
+        raise UserAlreadyExists(phone)
+
     await db.refresh(user)
     await db.refresh(wallet)
     return user, wallet
