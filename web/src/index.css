@@ -449,3 +449,10 @@ input::placeholder { color: var(--ink-muted); }
   .tabbar a.active { color: var(--green); }
   .balance { font-size: 34px; }
 }
+
+/* ---- Filter chips + 4-up actions ---- */
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 12px; margin-bottom: 8px; }
+.chip { flex: none; padding: 6px 14px; border-radius: 999px; font-size: 13px; }
+.chip.on { background: var(--green); color: #fff; border-color: var(--green); }
+.chip.on:hover:not(:disabled) { background: var(--green); }
+.actions { grid-template-columns: repeat(4, 1fr); }

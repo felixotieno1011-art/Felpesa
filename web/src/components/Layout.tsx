@@ -5,6 +5,7 @@ const TABS = [
   { to: "/", label: "Home", ico: "🏠", end: true },
   { to: "/send", label: "Send", ico: "💸", end: false },
   { to: "/pay", label: "Pay", ico: "🧾", end: false },
+  { to: "/money", label: "Money", ico: "💰", end: false },
   { to: "/history", label: "History", ico: "🕘", end: false },
 ];
 
