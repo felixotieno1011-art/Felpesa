@@ -425,7 +425,7 @@ input::placeholder { color: var(--ink-muted); }
 .tx-out { color: var(--ink); }
 .tx-msg { font-size: 12px; color: var(--ink-muted); margin-top: 4px; max-width: 260px; }
 
-@media (max-width: 640px) {
+@media (max-width: 900px) {
   .container { padding: 16px 16px 90px; }
   .nav { margin-bottom: 16px; }
   .nav a, .nav .nav-link-extra { display: none; }
@@ -471,10 +471,14 @@ input::placeholder { color: var(--ink-muted); }
   box-shadow: var(--shadow-lg);
 }
 .pin-input { text-align: center; font-size: 28px; letter-spacing: 12px; }
-@media (min-width: 641px) {
+@media (min-width: 901px) {
   .sheet-backdrop { align-items: center; }
   .sheet { border-radius: var(--radius-lg); }
 }
 
 /* 5 quick actions */
 .actions { grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: 8px; }
+
+/* never allow sideways scroll */
+html, body { overflow-x: hidden; }
+.container, .card { max-width: 100%; }
