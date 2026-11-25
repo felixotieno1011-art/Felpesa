@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { api, ApiError, Transaction } from "../api/client";
 import { useAuth } from "../auth";
 import PinSheet from "../components/PinSheet";
@@ -53,6 +54,7 @@ export default function Money() {
     <div className="card">
       <h3>Deposit / Withdraw</h3>
       <p className="muted">Sandbox: no real money moves.</p>
+      <p><Link to="/mpesa">Top up via M-Pesa (Daraja sandbox) →</Link></p>
 
       <div className="flex mb-4">
         {(["deposit", "withdraw"] as Mode[]).map((m) => (

@@ -21,3 +21,4 @@ __all__ = [
     "Wallet",
 ]
 from app.models.merchant import Merchant  # noqa: F401
+from app.models.mpesa_request import MpesaRequest  # noqa: F401

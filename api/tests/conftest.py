@@ -82,6 +82,11 @@ async def purge_test_users() -> None:
             await db.delete(a)
         await db.flush()
 
+        from app.models import MpesaRequest as _MR
+        for _r in (await db.scalars(select(_MR).where(_MR.user_id.in_(user_ids)))).all():
+            await db.delete(_r)
+        await db.flush()
+
         wallet_ids = list(
             (await db.scalars(select(Wallet.id).where(Wallet.user_id.in_(user_ids)))).all()
         )

@@ -10,6 +10,7 @@ import Pay from "./pages/Pay";
 import Money from "./pages/Money";
 import Pin from "./pages/Pin";
 import Airtime from "./pages/Airtime";
+import Mpesa from "./pages/Mpesa";
 
 function Protected({ children }: { children: JSX.Element }) {
   const { token } = useAuth();
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="/money" element={<Money />} />
         <Route path="/pin" element={<Pin />} />
         <Route path="/airtime" element={<Airtime />} />
+        <Route path="/mpesa" element={<Mpesa />} />
         <Route path="/admin" element={<Admin />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -45,6 +45,15 @@ class Settings(BaseSettings):
     fraud_rapid_window_seconds: int = 60
     fraud_rapid_max_transfers: int = 3
 
+    # ---- daraja (sandbox only) ----
+    mpesa_env: str = "sandbox"
+    mpesa_consumer_key: str = ""
+    mpesa_consumer_secret: str = ""
+    mpesa_shortcode: str = "174379"
+    mpesa_passkey: str = ""
+    mpesa_callback_base_url: str = ""
+    mpesa_callback_secret: str = ""
+
     @property
     def database_url(self) -> str:
         return (
