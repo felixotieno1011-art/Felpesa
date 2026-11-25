@@ -52,7 +52,7 @@ class TransactionListResponse(Paginated[TransactionOut]):
 
 class TransactionFilter(BaseModel):
     """Query-string filters for GET /transactions. All optional."""
-    type: Literal["transfer", "deposit", "withdrawal", "paybill", "buygoods"] | None = None
+    type: Literal["transfer", "deposit", "withdrawal", "paybill", "buygoods", "airtime"] | None = None
     status: Literal["pending", "completed", "failed", "reversed"] | None = None
     direction: Literal["in", "out"] | None = None  # in=incoming, out=outgoing
     flagged_fraud: bool | None = None

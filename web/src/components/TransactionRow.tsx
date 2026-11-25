@@ -6,6 +6,7 @@ const LABEL: Record<string, string> = {
   withdrawal: "Withdrawal",
   paybill: "Pay Bill",
   buygoods: "Buy Goods",
+  airtime: "Airtime",
 };
 const ICON: Record<string, string> = {
   transfer: "💸",
@@ -13,6 +14,7 @@ const ICON: Record<string, string> = {
   withdrawal: "⬆️",
   paybill: "🧾",
   buygoods: "🛍️",
+  airtime: "📱",
 };
 
 const fmt = (s: string) =>

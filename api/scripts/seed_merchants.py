@@ -11,6 +11,7 @@ DEMO_MERCHANTS = [
     ("paybill", "888881", "Demo Water Ltd"),
     ("buygoods", "500100", "Demo Duka"),
     ("buygoods", "500101", "Demo Cafe"),
+    ("airtime", "000001", "Felpesa Airtime"),
 ]
 
 

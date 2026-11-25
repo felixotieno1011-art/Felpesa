@@ -21,6 +21,9 @@ def _text(t: Transaction, wallet_id: uuid.UUID, bal: Decimal | None) -> str:
     if t.type in ("paybill", "buygoods"):
         target = (t.description or "").split(" ", 1)[-1]
         body = f"{amt} paid to {target}"
+    elif t.type == "airtime":
+        target = (t.description or "").split(" ", 1)[-1]
+        body = f"{amt} airtime bought for {target}"
     elif t.type == "deposit":
         body = f"{amt} deposited to your wallet"
     elif t.type == "withdrawal":

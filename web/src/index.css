@@ -475,3 +475,6 @@ input::placeholder { color: var(--ink-muted); }
   .sheet-backdrop { align-items: center; }
   .sheet { border-radius: var(--radius-lg); }
 }
+
+/* 5 quick actions */
+.actions { grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: 8px; }

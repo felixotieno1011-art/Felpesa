@@ -8,6 +8,7 @@ const FILTERS = [
   { key: "transfer", label: "Transfers" },
   { key: "paybill", label: "Pay Bill" },
   { key: "buygoods", label: "Buy Goods" },
+  { key: "airtime", label: "Airtime" },
   { key: "deposit", label: "Deposits" },
   { key: "withdrawal", label: "Withdrawals" },
 ];

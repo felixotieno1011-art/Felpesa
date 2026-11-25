@@ -64,6 +64,9 @@ export default function Dashboard() {
         <Link to="/money" className="action">
           <span className="ico">💰</span>Money
         </Link>
+        <Link to="/airtime" className="action">
+          <span className="ico">📱</span>Airtime
+        </Link>
         <Link to="/history" className="action">
           <span className="ico">🕘</span>History
         </Link>
