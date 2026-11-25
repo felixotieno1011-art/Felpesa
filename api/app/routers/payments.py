@@ -9,6 +9,7 @@ from app.core.config import get_settings
 from app.core.rate_limit import RateLimitExceeded, check_rate_limit
 from app.core.redis import get_redis
 from app.deps import CurrentUser, SessionDep
+from app.pin_dep import require_pin
 from app.schemas.transaction import TransactionOut
 from app.services import message_service, payment_service, transfer_service, wallet_service
 
@@ -74,7 +75,8 @@ async def _pay(kind, payload, user, db, redis_client, idem):
     return out
 
 
-@router.post("/paybill", response_model=TransactionOut, status_code=201)
+@router.post("/paybill", response_model=TransactionOut, status_code=201,
+             dependencies=[Depends(require_pin)])
 async def pay_bill(
     payload: PayRequest,
     user: CurrentUser,
@@ -87,7 +89,8 @@ async def pay_bill(
     return await _pay("paybill", payload, user, db, redis_client, idempotency_key)
 
 
-@router.post("/till", response_model=TransactionOut, status_code=201)
+@router.post("/till", response_model=TransactionOut, status_code=201,
+             dependencies=[Depends(require_pin)])
 async def buy_goods(
     payload: PayRequest,
     user: CurrentUser,

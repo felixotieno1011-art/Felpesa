@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { api, ApiError, Transaction } from "../api/client";
 import { useAuth } from "../auth";
+import PinSheet from "../components/PinSheet";
+import { usePinStatus } from "../hooks/usePinStatus";
 
 type Kind = "paybill" | "till";
 type Step = "form" | "confirm" | "done";
@@ -19,6 +21,9 @@ export default function Pay() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<Transaction | null>(null);
   const [idemKey, setIdemKey] = useState("");
+  const hasPin = usePinStatus(token);
+  const [pinOpen, setPinOpen] = useState(false);
+  const [pinError, setPinError] = useState("");
 
   const amt = Number(amount);
   const valid =
@@ -26,16 +31,17 @@ export default function Pay() {
     amt > 0 &&
     (kind === "till" || account.trim().length > 0);
 
-  async function pay() {
+  async function pay(pin?: string) {
     setBusy(true);
     setError("");
+    setPinError("");
     try {
       const tx = await api<Transaction>(
         kind === "paybill" ? "/payments/paybill" : "/payments/till",
         {
           method: "POST",
           token,
-          headers: { "Idempotency-Key": idemKey },
+          headers: pin ? { "Idempotency-Key": idemKey, "X-Pin": pin } : { "Idempotency-Key": idemKey },
           body: JSON.stringify({
             number,
             account_ref: kind === "paybill" ? account.trim() : null,
@@ -46,9 +52,16 @@ export default function Pay() {
       );
       setResult(tx);
       setStep("done");
+      setPinOpen(false);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Something went wrong");
-      setStep("form");
+      const msg = e instanceof ApiError ? e.message : "Something went wrong";
+      if (pin && e instanceof ApiError && (e.status === 403 || e.status === 429)) {
+        setPinError(msg);
+      } else {
+        setError(msg);
+        setStep("form");
+        setPinOpen(false);
+      }
     } finally {
       setBusy(false);
     }
@@ -143,13 +156,22 @@ export default function Pay() {
               )}
             </div>
           </div>
-          <button className="primary mt-4" style={{ width: "100%" }} disabled={busy} onClick={pay}>
+          <button className="primary mt-4" style={{ width: "100%" }} disabled={busy} onClick={() => (hasPin ? setPinOpen(true) : pay())}>
             {busy ? "Paying..." : "Confirm & Pay"}
           </button>
           <button className="mt-2" style={{ width: "100%" }} disabled={busy} onClick={() => setStep("form")}>
             Back
           </button>
         </>
+      )}
+
+      {pinOpen && (
+        <PinSheet
+          busy={busy}
+          error={pinError}
+          onSubmit={(p) => pay(p)}
+          onCancel={() => setPinOpen(false)}
+        />
       )}
 
       {step === "done" && result && (

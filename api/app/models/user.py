@@ -22,4 +22,6 @@ class User(Base, TimestampMixin):
     role: Mapped[str] = mapped_column(String(10), nullable=False, default="user", server_default=text("'user'"))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
 
+    pin_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+
     wallets: Mapped[list["Wallet"]] = relationship(back_populates="user")  # noqa: F821

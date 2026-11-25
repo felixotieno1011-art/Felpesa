@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { api, ApiError, Transaction } from "../api/client";
 import { useAuth } from "../auth";
+import PinSheet from "../components/PinSheet";
+import { usePinStatus } from "../hooks/usePinStatus";
 
 type Recipient = { name_masked: string; wallet_id: string };
 
@@ -23,6 +25,9 @@ export default function SendMoney() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [finding, setFinding] = useState(false);
+  const hasPin = usePinStatus(token);
+  const [pinOpen, setPinOpen] = useState(false);
+  const [pinError, setPinError] = useState("");
 
   const find = async () => {
     setError("");
@@ -47,17 +52,26 @@ export default function SendMoney() {
     }
   };
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!recipient) return;
+    if (hasPin) setPinOpen(true);
+    else void send();
+  };
+
+  const send = async (pin?: string) => {
+    if (!recipient) return;
     setError("");
+    setPinError("");
     setResult(null);
     setBusy(true);
     try {
       const txn = await api<Transaction>("/transfers", {
         method: "POST",
         token,
-        headers: { "Idempotency-Key": crypto.randomUUID() },
+        headers: pin
+          ? { "Idempotency-Key": crypto.randomUUID(), "X-Pin": pin }
+          : { "Idempotency-Key": crypto.randomUUID() },
         body: JSON.stringify({
           to_wallet_id: recipient.wallet_id,
           amount: Number(amount).toFixed(4),
@@ -70,8 +84,15 @@ export default function SendMoney() {
       setDescription("");
       setRecipient(null);
       setPhone("");
+      setPinOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Transfer failed");
+      const msg = err instanceof Error ? err.message : "Transfer failed";
+      if (pin && err instanceof ApiError && (err.status === 403 || err.status === 429)) {
+        setPinError(msg);
+      } else {
+        setError(msg);
+        setPinOpen(false);
+      }
     } finally {
       setBusy(false);
     }
@@ -120,6 +141,15 @@ export default function SendMoney() {
             {busy ? "Sending..." : "Send"}
           </button>
         </form>
+      )}
+
+      {pinOpen && (
+        <PinSheet
+          busy={busy}
+          error={pinError}
+          onSubmit={(p) => send(p)}
+          onCancel={() => setPinOpen(false)}
+        />
       )}
 
       {error && <div className="error">{error}</div>}

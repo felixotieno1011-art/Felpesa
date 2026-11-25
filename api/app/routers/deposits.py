@@ -1,9 +1,10 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.deps import CurrentUser, SessionDep
+from app.pin_dep import require_pin
 from app.schemas.transaction import TransactionOut
 from app.services import deposit_service, wallet_service
 
@@ -48,7 +49,8 @@ async def create_deposit(
     return TransactionOut.model_validate(txn)
 
 
-@router.post("/withdrawals", response_model=TransactionOut, status_code=201)
+@router.post("/withdrawals", response_model=TransactionOut, status_code=201,
+             dependencies=[Depends(require_pin)])
 async def create_withdrawal(
     payload: WithdrawalRequest,
     user: CurrentUser,

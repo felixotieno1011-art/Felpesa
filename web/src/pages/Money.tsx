@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { api, ApiError, Transaction } from "../api/client";
 import { useAuth } from "../auth";
+import PinSheet from "../components/PinSheet";
+import { usePinStatus } from "../hooks/usePinStatus";
 
 type Mode = "deposit" | "withdraw";
 
@@ -11,24 +13,37 @@ export default function Money() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState<Transaction | null>(null);
+  const hasPin = usePinStatus(token);
+  const [pinOpen, setPinOpen] = useState(false);
+  const [pinError, setPinError] = useState("");
 
   const amt = Number(amount);
 
-  async function submit() {
+  async function submit(pin?: string) {
     setBusy(true);
     setError("");
+    setPinError("");
     setDone(null);
     try {
       const tx = await api<Transaction>(mode === "deposit" ? "/deposits" : "/withdrawals", {
         method: "POST",
         token,
-        headers: { "Idempotency-Key": crypto.randomUUID() },
+        headers: pin
+          ? { "Idempotency-Key": crypto.randomUUID(), "X-Pin": pin }
+          : { "Idempotency-Key": crypto.randomUUID() },
         body: JSON.stringify({ amount: amt, currency: "KES" }),
       });
       setDone(tx);
+      setPinOpen(false);
       setAmount("");
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Something went wrong");
+      const msg = e instanceof ApiError ? e.message : "Something went wrong";
+      if (pin && e instanceof ApiError && (e.status === 403 || e.status === 429)) {
+        setPinError(msg);
+      } else {
+        setError(msg);
+        setPinOpen(false);
+      }
     } finally {
       setBusy(false);
     }
@@ -71,6 +86,15 @@ export default function Money() {
         ))}
       </div>
 
+      {pinOpen && (
+        <PinSheet
+          busy={busy}
+          error={pinError}
+          onSubmit={(p) => submit(p)}
+          onCancel={() => setPinOpen(false)}
+        />
+      )}
+
       {error && <div className="error">{error}</div>}
       {done && (
         <div className="success">
@@ -83,7 +107,7 @@ export default function Money() {
         className="primary"
         style={{ width: "100%" }}
         disabled={busy || !(amt > 0)}
-        onClick={submit}
+        onClick={() => (mode === "withdraw" && hasPin ? setPinOpen(true) : submit())}
       >
         {busy ? "Working..." : mode === "deposit" ? "Deposit" : "Withdraw"}
       </button>

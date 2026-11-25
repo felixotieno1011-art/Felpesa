@@ -6,7 +6,7 @@ from sqlalchemy import text
 from app.core.config import get_settings
 from app.core.db import engine
 from app.core.redis import close_redis, get_redis_client
-from app.routers import auth, audit, deposits, ledger, payments, reconciliation, transactions, transfers, wallets
+from app.routers import auth, audit, deposits, ledger, payments, pin, reconciliation, transactions, transfers, wallets
 
 settings = get_settings()
 
@@ -36,6 +36,7 @@ app.include_router(ledger.router)
 app.include_router(reconciliation.router)
 app.include_router(audit.router)
 app.include_router(payments.router)
+app.include_router(pin.router)
 
 
 @app.get("/health")

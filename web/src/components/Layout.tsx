@@ -29,6 +29,9 @@ export default function Layout() {
             {t.label}
           </NavLink>
         ))}
+        <NavLink to="/pin" className={cls}>
+          PIN
+        </NavLink>
         <NavLink to="/admin" className={cls}>
           Admin
         </NavLink>

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, Paginated, Transaction, Wallet } from "../api/client";
 import { useAuth } from "../auth";
 import TransactionRow from "../components/TransactionRow";
+import { usePinStatus } from "../hooks/usePinStatus";
 
 export default function Dashboard() {
   const { token } = useAuth();
@@ -10,6 +11,7 @@ export default function Dashboard() {
   const [txns, setTxns] = useState<Transaction[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const hasPin = usePinStatus(token);
 
   useEffect(() => {
     if (!token) return;
@@ -37,6 +39,11 @@ export default function Dashboard() {
   return (
     <div>
       {error && <div className="error">{error}</div>}
+      {hasPin === false && (
+        <div className="error" style={{ background: "var(--warning-soft)", color: "var(--warning)" }}>
+          Secure your wallet: <Link to="/pin">set a 4-digit PIN</Link>
+        </div>
+      )}
 
       <div className="card hero">
         <div className="muted">Available balance</div>

@@ -7,6 +7,7 @@ from app.core.config import get_settings
 from app.core.rate_limit import RateLimitExceeded, check_rate_limit
 from app.core.redis import get_redis
 from app.deps import CurrentUser, SessionDep
+from app.pin_dep import require_pin
 from app.schemas.transaction import TransactionOut, TransferRequest
 from app.services import transfer_service, wallet_service
 
@@ -16,7 +17,10 @@ settings = get_settings()
 RedisDep = Annotated[Redis, Depends(get_redis)]
 
 
-@router.post("", response_model=TransactionOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=TransactionOut, status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_pin)],
+)
 async def create_transfer(
     payload: TransferRequest,
     user: CurrentUser,
