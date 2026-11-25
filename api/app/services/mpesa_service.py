@@ -19,7 +19,7 @@ async def initiate_stk(
     db: AsyncSession, *, user: User, wallet: Wallet, phone: str, amount: int
 ) -> MpesaRequest:
     s = get_settings()
-    callback_url = f"{s.mpesa_callback_base_url.rstrip('/')}/mpesa/callback/{s.mpesa_callback_secret}"
+    callback_url = f"{s.mpesa_callback_base_url.rstrip('/')}/hooks/stk/{s.mpesa_callback_secret}"
     resp = await daraja.stk_push(
         phone=phone.lstrip("+"), amount=amount, reference="FELPESA",
         description="Felpesa topup", callback_url=callback_url,

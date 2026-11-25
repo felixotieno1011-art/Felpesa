@@ -16,6 +16,7 @@ from app.models import MpesaRequest
 from app.services import daraja, mpesa_service, wallet_service
 
 router = APIRouter(prefix="/mpesa", tags=["mpesa"])
+hook_router = APIRouter(tags=["mpesa"])
 RedisDep = Annotated[Redis, Depends(get_redis)]
 
 
@@ -67,7 +68,7 @@ async def stk_status(checkout_request_id: str, user: CurrentUser, db: SessionDep
     }
 
 
-@router.post("/callback/{secret}")
+@hook_router.post("/hooks/stk/{secret}")
 async def callback(secret: str, request: Request, db: SessionDep) -> dict:
     expected = get_settings().mpesa_callback_secret
     if not expected or not hmac.compare_digest(secret, expected):

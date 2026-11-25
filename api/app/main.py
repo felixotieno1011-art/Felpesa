@@ -39,6 +39,7 @@ app.include_router(payments.router)
 app.include_router(pin.router)
 app.include_router(airtime.router)
 app.include_router(mpesa.router)
+app.include_router(mpesa.hook_router)
 
 
 @app.get("/health")

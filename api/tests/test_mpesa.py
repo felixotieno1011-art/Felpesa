@@ -65,7 +65,7 @@ async def test_stk_success_credits_once(client: AsyncClient, monkeypatch):
     assert await _balance(wallet) == Decimal("0")
 
     for _ in range(2):  # second call = Safaricom retry
-        r = await client.post(f"/mpesa/callback/{SECRET}", json=_cb(checkout))
+        r = await client.post(f"/hooks/stk/{SECRET}", json=_cb(checkout))
         assert r.status_code == 200 and r.json()["ResultCode"] == 0
 
     st = await _status(client, token, checkout)
@@ -76,7 +76,7 @@ async def test_stk_success_credits_once(client: AsyncClient, monkeypatch):
 async def test_stk_cancelled_by_user(client: AsyncClient, monkeypatch):
     _, wallet, token = await register_user_and_wallet(client, "+254799900601")
     checkout = await _start(client, monkeypatch, token)
-    await client.post(f"/mpesa/callback/{SECRET}", json=_cb(checkout, code=1032))
+    await client.post(f"/hooks/stk/{SECRET}", json=_cb(checkout, code=1032))
     assert (await _status(client, token, checkout))["status"] == "cancelled"
     assert await _balance(wallet) == Decimal("0")
 
@@ -84,7 +84,7 @@ async def test_stk_cancelled_by_user(client: AsyncClient, monkeypatch):
 async def test_callback_wrong_secret_rejected(client: AsyncClient, monkeypatch):
     _, wallet, token = await register_user_and_wallet(client, "+254799900602")
     checkout = await _start(client, monkeypatch, token)
-    r = await client.post("/mpesa/callback/wrong", json=_cb(checkout))
+    r = await client.post("/hooks/stk/wrong", json=_cb(checkout))
     assert r.status_code == 404
     assert await _balance(wallet) == Decimal("0")
 
@@ -92,7 +92,7 @@ async def test_callback_wrong_secret_rejected(client: AsyncClient, monkeypatch):
 async def test_amount_mismatch_needs_review(client: AsyncClient, monkeypatch):
     _, wallet, token = await register_user_and_wallet(client, "+254799900603")
     checkout = await _start(client, monkeypatch, token, 100)
-    await client.post(f"/mpesa/callback/{SECRET}", json=_cb(checkout, amount=1))
+    await client.post(f"/hooks/stk/{SECRET}", json=_cb(checkout, amount=1))
     assert (await _status(client, token, checkout))["status"] == "needs_review"
     assert await _balance(wallet) == Decimal("0")
 

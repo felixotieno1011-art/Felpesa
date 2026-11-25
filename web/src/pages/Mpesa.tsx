@@ -82,7 +82,7 @@ export default function Mpesa() {
   return (
     <div className="card">
       <h3>Top up with M-Pesa</h3>
-      <p className="muted">Daraja sandbox: no real money moves.</p>
+      <p className="muted">Test only. Use the Daraja test number, never your own phone.</p>
 
       {!checkout && (
         <>
