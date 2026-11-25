@@ -65,6 +65,7 @@ export type Transaction = {
   fraud_reason: string | null;
   created_at: string;
   completed_at: string | null;
+  message?: string | null;
 };
 
 export type Paginated<T> = {

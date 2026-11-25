@@ -6,6 +6,7 @@ import Dashboard from "./pages/Dashboard";
 import SendMoney from "./pages/SendMoney";
 import History from "./pages/History";
 import Admin from "./pages/Admin";
+import Pay from "./pages/Pay";
 
 function Protected({ children }: { children: JSX.Element }) {
   const { token } = useAuth();
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/send" element={<SendMoney />} />
         <Route path="/history" element={<History />} />
+        <Route path="/pay" element={<Pay />} />
         <Route path="/admin" element={<Admin />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

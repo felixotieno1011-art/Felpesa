@@ -1,36 +1,75 @@
 import { useState } from "react";
-import { api, Transaction } from "../api/client";
+import { api, ApiError, Transaction } from "../api/client";
 import { useAuth } from "../auth";
+
+type Recipient = { name_masked: string; wallet_id: string };
+
+// 0712345678 -> +254712345678, 254712345678 -> +254712345678
+function normalizePhone(raw: string): string {
+  const p = raw.replace(/[\s-]/g, "");
+  if (p.startsWith("+")) return p;
+  if (p.startsWith("0")) return "+254" + p.slice(1);
+  if (p.startsWith("254")) return "+" + p;
+  return p;
+}
 
 export default function SendMoney() {
   const { token } = useAuth();
-  const [toWallet, setToWallet] = useState("");
-  const [amount, setAmount] = useState("10.0000");
+  const [phone, setPhone] = useState("");
+  const [recipient, setRecipient] = useState<Recipient | null>(null);
+  const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [result, setResult] = useState<Transaction | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [finding, setFinding] = useState(false);
+
+  const find = async () => {
+    setError("");
+    setRecipient(null);
+    setFinding(true);
+    try {
+      const r = await api<Recipient>(
+        `/wallets/lookup?phone=${encodeURIComponent(normalizePhone(phone))}`,
+        { token }
+      );
+      setRecipient(r);
+    } catch (e) {
+      setError(
+        e instanceof ApiError && e.status === 404
+          ? "No Felpesa account found for that number"
+          : e instanceof Error
+          ? e.message
+          : "Lookup failed"
+      );
+    } finally {
+      setFinding(false);
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!recipient) return;
     setError("");
     setResult(null);
     setBusy(true);
     try {
-      // New Idempotency-Key per submission — double-submits are prevented by disabling the button
-      const key = crypto.randomUUID();
       const txn = await api<Transaction>("/transfers", {
         method: "POST",
         token,
-        headers: { "Idempotency-Key": key },
+        headers: { "Idempotency-Key": crypto.randomUUID() },
         body: JSON.stringify({
-          to_wallet_id: toWallet,
-          amount,
+          to_wallet_id: recipient.wallet_id,
+          amount: Number(amount).toFixed(4),
           currency: "KES",
           description: description || null,
         }),
       });
       setResult(txn);
+      setAmount("");
+      setDescription("");
+      setRecipient(null);
+      setPhone("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Transfer failed");
     } finally {
@@ -40,45 +79,59 @@ export default function SendMoney() {
 
   return (
     <div className="card">
-      <h3 style={{ marginTop: 0 }}>Send money</h3>
-      <form onSubmit={submit}>
-        <label>Recipient wallet ID</label>
+      <h3>Send money</h3>
+
+      <label>Recipient phone</label>
+      <div className="flex" style={{ alignItems: "flex-start" }}>
         <input
-          value={toWallet}
-          onChange={(e) => setToWallet(e.target.value)}
-          placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-          required
+          inputMode="tel"
+          value={phone}
+          onChange={(e) => {
+            setPhone(e.target.value);
+            setRecipient(null);
+          }}
+          placeholder="0712 345 678"
         />
-        <label>Amount (KES)</label>
-        <input
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          required
-        />
-        <label>Description (optional)</label>
-        <input
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          maxLength={500}
-        />
-        {error && <div className="error">{error}</div>}
-        <button type="submit" className="primary" disabled={busy}>
-          {busy ? "Sending..." : "Send"}
+        <button type="button" disabled={finding || phone.length < 7} onClick={find}>
+          {finding ? "..." : "Find"}
         </button>
-      </form>
+      </div>
+
+      {recipient && (
+        <form onSubmit={submit}>
+          <div className="success">
+            Send to <b>{recipient.name_masked}</b>
+          </div>
+          <label>Amount (KES)</label>
+          <input
+            inputMode="decimal"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))}
+            placeholder="0.00"
+            required
+          />
+          <label>Note (optional)</label>
+          <input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            maxLength={500}
+          />
+          <button type="submit" className="primary" disabled={busy || !(Number(amount) > 0)}>
+            {busy ? "Sending..." : "Send"}
+          </button>
+        </form>
+      )}
+
+      {error && <div className="error">{error}</div>}
 
       {result && (
-        <div style={{ marginTop: 24 }}>
-          <div style={{ color: "#137333", fontWeight: 600 }}>Transfer sent</div>
-          <div className="muted" style={{ marginTop: 8 }}>
-            ID: {result.id}
-            <br />
-            Amount: {result.amount} {result.currency}
-            <br />
-            Status: {result.status}
+        <div className="success mt-4">
+          <b>Transfer sent</b>
+          <div className="muted mt-2">
+            KES {result.amount} · {result.status}
             {result.flagged_fraud && (
               <>
-                <br />
+                {" "}
                 <span className="badge flag">Flagged: {result.fraud_reason}</span>
               </>
             )}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, Paginated, Transaction, Wallet } from "../api/client";
 import { useAuth } from "../auth";
 import TransactionRow from "../components/TransactionRow";
@@ -8,6 +9,7 @@ export default function Dashboard() {
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [txns, setTxns] = useState<Transaction[]>([]);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!token) return;
@@ -19,26 +21,52 @@ export default function Dashboard() {
         setTxns(t.items);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load");
+      } finally {
+        setLoading(false);
       }
     })();
   }, [token]);
 
+  const bal = wallet
+    ? Number(wallet.balance).toLocaleString("en-KE", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    : "—";
+
   return (
     <div>
       {error && <div className="error">{error}</div>}
-      <div className="card">
-        <div className="muted">Balance</div>
+
+      <div className="card hero">
+        <div className="muted">Available balance</div>
         <div className="balance">
-          {wallet ? `${wallet.balance} ${wallet.currency}` : "—"}
+          {bal}
+          <span className="currency">{wallet?.currency ?? "KES"}</span>
         </div>
-        <div className="muted">Wallet status: {wallet?.status ?? "—"}</div>
+        <div className="muted">Wallet {wallet?.status ?? "—"}</div>
       </div>
+
+      <div className="actions">
+        <Link to="/send" className="action">
+          <span className="ico">💸</span>Send
+        </Link>
+        <Link to="/pay" className="action">
+          <span className="ico">🧾</span>Pay
+        </Link>
+        <Link to="/history" className="action">
+          <span className="ico">🕘</span>History
+        </Link>
+      </div>
+
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>Recent activity</h3>
-        {txns.length === 0 ? (
+        <h3>Recent activity</h3>
+        {loading ? (
+          <p className="muted">Loading...</p>
+        ) : txns.length === 0 ? (
           <p className="muted">No transactions yet.</p>
         ) : (
-          txns.map((t) => <TransactionRow key={t.id} txn={t} />)
+          txns.map((t) => <TransactionRow key={t.id} txn={t} walletId={wallet?.id} />)
         )}
       </div>
     </div>

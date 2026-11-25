@@ -75,7 +75,10 @@ async def test_sql_injection_in_transfer_description(
 async def test_tampered_jwt_rejected(client: AsyncClient):
     """Flip one char in the signature — token must be rejected."""
     _, _, token = await register_user_and_wallet(client, "+254799900702")
-    tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+    header, payload, sig = token.split(".")
+    mid = len(sig) // 2
+    sig = sig[:mid] + ("A" if sig[mid] != "A" else "B") + sig[mid + 1:]
+    tampered = ".".join([header, payload, sig])
 
     r = await client.get(
         "/wallets/me", headers={"Authorization": f"Bearer {tampered}"}
