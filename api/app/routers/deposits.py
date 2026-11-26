@@ -59,7 +59,7 @@ async def create_deposit(
 
 
 @router.post("/withdrawals", response_model=TransactionOut, status_code=201,
-             dependencies=[Depends(require_pin)])
+             dependencies=[Depends(simulated_deposits_only), Depends(require_pin)])
 async def create_withdrawal(
     payload: WithdrawalRequest,
     user: CurrentUser,

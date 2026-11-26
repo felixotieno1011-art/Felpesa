@@ -1,4 +1,5 @@
 """Request dependencies: current user, admin gate."""
+import uuid
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -34,8 +35,12 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         ) from e
 
+    if payload.get("type") != "access":
+        raise HTTPException(status_code=401, detail="Invalid token type")
     sub = payload.get("sub")
-    if not sub:
+    try:
+        sub = uuid.UUID(str(sub))
+    except ValueError:
         raise HTTPException(status_code=401, detail="Invalid token payload")
 
     user = await db.get(User, sub)

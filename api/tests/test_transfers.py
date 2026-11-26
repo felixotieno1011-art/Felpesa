@@ -227,60 +227,6 @@ async def test_concurrent_opposite_direction_transfers_no_deadlock(client: Async
         assert b.balance == Decimal("1000.0000"), f"b={b.balance}"
 
 
-async def test_concurrent_opposite_direction_transfers_no_deadlock(client: AsyncClient):
-    """A→B and B→A at the same time must both succeed, not deadlock.
-
-    Before the fix: both lock the sender first. Tx1 locks Alice, Tx2 locks
-    Bob. Each waits on the other. Postgres kills one → random 500.
-    After the fix: both lock in sorted UUID order, so one waits for the
-    other instead of deadlocking. Both transfers complete in sequence.
-
-    This is the canonical row-lock ordering test. If it passes, the transfer
-    service is safe under concurrent opposite-direction traffic.
-    """
-    _, a_wallet, token_a = await register_user_and_wallet(client, "+254799900800")
-    _, b_wallet, token_b = await register_user_and_wallet(client, "+254799900801")
-    await fund_wallet(a_wallet, "1000.0000")
-    await fund_wallet(b_wallet, "1000.0000")
-
-    # Barrier: verify funding is fully visible before the concurrent transfer.
-    # Without this, the transfer's lock query can race the fund commit
-    # (asyncpg + READ COMMITTED), causing the balance to read stale — a
-    # source of flaky test failures that aren't a bug in transfer_service.
-    async with SessionLocal() as db:
-        wa = await db.get(Wallet, uuid.UUID(a_wallet))
-        wb = await db.get(Wallet, uuid.UUID(b_wallet))
-        assert wa.balance == Decimal("1000.0000"), f"pre-transfer A={wa.balance}"
-        assert wb.balance == Decimal("1000.0000"), f"pre-transfer B={wb.balance}"
-
-    async def do_transfer(token: str, to_wallet: str, idem_suffix: str):
-        return await client.post(
-            "/transfers",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Idempotency-Key": f"deadlock-test-{idem_suffix}",
-            },
-            json={"to_wallet_id": to_wallet, "amount": "100.0000", "currency": "KES"},
-        )
-
-    # Fire A→B and B→A concurrently.
-    r_ab, r_ba = await asyncio.gather(
-        do_transfer(token_a, b_wallet, "ab"),
-        do_transfer(token_b, a_wallet, "ba"),
-    )
-
-    # Both must succeed. If the deadlock fires, one will be a 500.
-    assert r_ab.status_code == 201, f"A→B failed: {r_ab.status_code} {r_ab.text}"
-    assert r_ba.status_code == 201, f"B→A failed: {r_ba.status_code} {r_ba.text}"
-
-    # Both balances back where they started (each net ±0).
-    async with SessionLocal() as db:
-        a = await db.get(Wallet, uuid.UUID(a_wallet))
-        b = await db.get(Wallet, uuid.UUID(b_wallet))
-        assert a.balance == Decimal("1000.0000"), f"a={a.balance}"
-        assert b.balance == Decimal("1000.0000"), f"b={b.balance}"
-
-
 async def test_concurrent_duplicate_idempotency_key_only_one_transfer(client: AsyncClient):
     """Two concurrent requests with the SAME idempotency key must produce
     exactly one transfer. Both callers get the SAME transaction ID.
