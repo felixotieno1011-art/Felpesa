@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audit
 from app.models import LedgerEntry, Transaction, Wallet
-from app.services import fraud_service
+from app.services import fraud_service, notification_service
 
 
 class TransferError(Exception):
@@ -233,6 +233,10 @@ async def _execute_transfer(
                 "from_wallet_id": str(from_w.id),
                 "to_wallet_id": str(to_w.id),
             },
+        )
+
+        notification_service.after_transfer(
+            db, txn=txn, from_w=from_w, to_w=to_w, from_after=from_after, to_after=to_after
         )
 
         await db.commit()

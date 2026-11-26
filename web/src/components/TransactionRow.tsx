@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { Transaction } from "../api/client";
 
 const LABEL: Record<string, string> = {
@@ -27,12 +28,13 @@ export default function TransactionRow({
   txn: Transaction;
   walletId?: string;
 }) {
+  const nav = useNavigate();
   const incoming = walletId
     ? txn.to_wallet_id === walletId
     : txn.type === "deposit";
 
   return (
-    <div className="row">
+    <div className="row tap" onClick={() => nav(`/receipt/${txn.id}`)}>
       <div className="flex" style={{ alignItems: "center", gap: 0 }}>
         <div className="tx-ico">{ICON[txn.type] ?? "💱"}</div>
         <div>

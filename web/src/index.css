@@ -482,3 +482,11 @@ input::placeholder { color: var(--ink-muted); }
 /* never allow sideways scroll */
 html, body { overflow-x: hidden; }
 .container, .card { max-width: 100%; }
+
+.badge-dot {
+  display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px;
+  border-radius: 9px; background: var(--danger); color: #fff;
+  font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
+}
+.row.tap { cursor: pointer; }
+.row.tap:hover { background: var(--gold-pale); }

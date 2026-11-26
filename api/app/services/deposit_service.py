@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audit
+from app.services import notification_service
 from app.models import LedgerEntry, Transaction, Wallet
 from app.services.wallet_service import get_clearing_wallet
 
@@ -196,6 +197,10 @@ async def _deposit(
             },
         )
 
+        notification_service.after_cash(
+            db, txn=txn, user_id=user_w.user_id, balance_after=user_after
+        )
+
         await db.commit()
 
     except IntegrityError:
@@ -322,6 +327,10 @@ async def _withdraw(
                 "from_wallet_id": str(user_w.id),
                 "clearing_wallet_id": str(clearing.id),
             },
+        )
+
+        notification_service.after_cash(
+            db, txn=txn, user_id=user_w.user_id, balance_after=user_after
         )
 
         await db.commit()
