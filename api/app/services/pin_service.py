@@ -5,6 +5,7 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audit
+from app.core.config import get_settings
 from app.core.security import hash_password, verify_password
 from app.models import User
 
@@ -39,8 +40,10 @@ def _key(user_id: uuid.UUID) -> str:
 
 
 async def verify_pin(redis_client: Redis, user: User, pin: str | None) -> None:
-    """No-op when the user has no PIN. Raises PinRequired/PinInvalid/PinLocked."""
+    """Raises PinRequired/PinInvalid/PinLocked. No PIN set: required unless REQUIRE_PIN=false."""
     if user.pin_hash is None:
+        if get_settings().require_pin:
+            raise PinRequired
         return
     key = _key(user.id)
     fails = int(await redis_client.get(key) or 0)

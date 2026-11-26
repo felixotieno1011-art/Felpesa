@@ -1,4 +1,5 @@
 import os as _os
+_os.environ.setdefault("REQUIRE_PIN", "false")
 _os.environ.setdefault("RATE_LIMIT_AUTH_PER_MIN", "100000")
 """Shared pytest fixtures for Felpesa tests.
 

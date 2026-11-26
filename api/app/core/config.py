@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     # ---- rate limiting / fraud ----
     rate_limit_transfers_per_min: int = 5
     rate_limit_auth_per_min: int = 10
+    require_pin: bool = True
     fraud_amount_threshold: int = 50_000
     fraud_rapid_window_seconds: int = 60
     fraud_rapid_max_transfers: int = 3

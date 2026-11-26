@@ -11,6 +11,7 @@ import Money from "./pages/Money";
 import Pin from "./pages/Pin";
 import Airtime from "./pages/Airtime";
 import Mpesa from "./pages/Mpesa";
+import PinGate from "./components/PinGate";
 import Messages from "./pages/Messages";
 import Receipt from "./pages/Receipt";
 
@@ -32,12 +33,12 @@ export default function App() {
         }
       >
         <Route path="/" element={<Dashboard />} />
-        <Route path="/send" element={<SendMoney />} />
+        <Route path="/send" element={<PinGate><SendMoney /></PinGate>} />
         <Route path="/history" element={<History />} />
-        <Route path="/pay" element={<Pay />} />
+        <Route path="/pay" element={<PinGate><Pay /></PinGate>} />
         <Route path="/money" element={<Money />} />
         <Route path="/pin" element={<Pin />} />
-        <Route path="/airtime" element={<Airtime />} />
+        <Route path="/airtime" element={<PinGate><Airtime /></PinGate>} />
         <Route path="/mpesa" element={<Mpesa />} />
         <Route path="/messages" element={<Messages />} />
         <Route path="/receipt/:id" element={<Receipt />} />
