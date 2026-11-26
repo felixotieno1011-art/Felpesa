@@ -58,7 +58,7 @@ async def _lock_wallet(db: AsyncSession, wallet_id: uuid.UUID) -> Wallet:
     return wallet
 
 
-async def execute_transfer(
+async def _execute_transfer(
     db: AsyncSession,
     *,
     initiated_by: uuid.UUID,
@@ -242,4 +242,21 @@ async def execute_transfer(
         raise
 
     await db.refresh(txn)
+    return txn
+
+
+async def execute_transfer(db: AsyncSession, **kw) -> Transaction:
+    """Runs the transfer, then rejects key reuse with different params."""
+    from app.services.idempotency import ensure_same
+
+    txn = await _execute_transfer(db, **kw)
+    ensure_same(
+        txn,
+        type=kw.get("txn_type", "transfer"),
+        amount=kw["amount"],
+        currency=kw["currency"],
+        from_wallet_id=kw["from_wallet_id"],
+        to_wallet_id=kw["to_wallet_id"],
+        description=kw.get("description"),
+    )
     return txn

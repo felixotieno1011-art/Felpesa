@@ -3,7 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy import text
 
+from fastapi.responses import JSONResponse
+
 from app.core.config import get_settings
+from app.services.idempotency import IdempotencyConflict
 from app.core.db import engine
 from app.core.redis import close_redis, get_redis_client
 from app.routers import auth, audit, deposits, airtime, ledger, mpesa, payments, pin, reconciliation, transactions, transfers, wallets
@@ -26,6 +29,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
+
+@app.exception_handler(IdempotencyConflict)
+async def _idempotency_conflict(request, exc):
+    return JSONResponse(
+        status_code=409,
+        content={"detail": "Idempotency-Key was already used with different parameters"},
+    )
+
 
 app.include_router(auth.router)
 app.include_router(wallets.router)

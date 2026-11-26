@@ -1,3 +1,5 @@
+import os as _os
+_os.environ.setdefault("RATE_LIMIT_AUTH_PER_MIN", "100000")
 """Shared pytest fixtures for Felpesa tests.
 
 IMPORTANT: this module loads `.env.test` BEFORE importing app modules so

@@ -75,7 +75,7 @@ async def _todays_deposit_total(db: AsyncSession, user_id: uuid.UUID) -> Decimal
     return Decimal(str(row or 0))
 
 
-async def deposit(
+async def _deposit(
     db: AsyncSession,
     *,
     user_id: uuid.UUID,
@@ -215,7 +215,7 @@ async def deposit(
     return txn
 
 
-async def withdraw(
+async def _withdraw(
     db: AsyncSession,
     *,
     user_id: uuid.UUID,
@@ -338,4 +338,28 @@ async def withdraw(
         raise
 
     await db.refresh(txn)
+    return txn
+
+
+async def deposit(db: AsyncSession, **kw) -> Transaction:
+    from app.services.idempotency import ensure_same
+
+    txn = await _deposit(db, **kw)
+    ensure_same(
+        txn, type="deposit", amount=kw["amount"], currency=kw["currency"],
+        from_wallet_id=None, to_wallet_id=kw["to_wallet_id"],
+        description=kw.get("description"),
+    )
+    return txn
+
+
+async def withdraw(db: AsyncSession, **kw) -> Transaction:
+    from app.services.idempotency import ensure_same
+
+    txn = await _withdraw(db, **kw)
+    ensure_same(
+        txn, type="withdrawal", amount=kw["amount"], currency=kw["currency"],
+        from_wallet_id=kw["from_wallet_id"], to_wallet_id=None,
+        description=kw.get("description"),
+    )
     return txn
