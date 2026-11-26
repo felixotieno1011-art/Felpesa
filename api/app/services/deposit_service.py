@@ -122,6 +122,8 @@ async def _deposit(
 
         if user_w.is_system:
             raise DepositError("Cannot deposit to a system wallet")
+        if user_w.user_id != user_id:
+            raise DepositError("Wallet does not belong to this user")
         if user_w.currency != currency:
             raise DepositError(
                 f"Currency mismatch: wallet {user_w.currency} != {currency}"
@@ -257,6 +259,8 @@ async def _withdraw(
 
         if user_w.is_system:
             raise DepositError("Cannot withdraw from a system wallet")
+        if user_w.user_id != user_id:
+            raise DepositError("Wallet does not belong to this user")
         if user_w.currency != currency:
             raise DepositError(
                 f"Currency mismatch: wallet {user_w.currency} != {currency}"

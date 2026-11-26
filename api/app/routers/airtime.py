@@ -67,6 +67,8 @@ async def buy_airtime(
         transfer_service.SameWallet,
     ) as e:
         raise HTTPException(422, str(e))
+    except (transfer_service.SystemWalletNotAllowed, transfer_service.NotWalletOwner):
+        raise HTTPException(403, "Not allowed")
     except transfer_service.WalletNotFound:
         raise HTTPException(404, "Wallet not found")
 

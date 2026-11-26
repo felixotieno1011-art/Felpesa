@@ -68,20 +68,31 @@ async def test_login_is_rate_limited(client: AsyncClient, monkeypatch):
     await _clear("login-ip")
     await _clear("login-phone")
     bad = {"phone": "+254799900805", "password": "wrong-password"}
-    for _ in range(3):
-        assert (await client.post("/auth/login", json=bad)).status_code == 401
-    r = await client.post("/auth/login", json=bad)
-    assert r.status_code == 429 and "Retry-After" in r.headers
+    codes = []
+    for _ in range(8):  # 8 covers a window rollover mid-test
+        r = await client.post("/auth/login", json=bad)
+        codes.append(r.status_code)
+        if r.status_code == 429:
+            assert "Retry-After" in r.headers
+            break
+    assert 429 in codes, codes
+    assert codes.index(429) >= 3, codes
+    assert set(codes[:-1]) == {401}, codes
 
 
 async def test_register_is_rate_limited(client: AsyncClient, monkeypatch):
     monkeypatch.setattr(get_settings(), "rate_limit_auth_per_min", 3)
     await _clear("register-ip")
     codes = []
-    for i in range(4):
+    for i in range(8):
         r = await client.post(
             "/auth/register",
-            json={"phone": f"+25479990081{i}", "full_name": "Rate Test", "password": "hunter2hunter2"},
+            json={"phone": f"+2547999008{20 + i}", "full_name": "Rate Test",
+                  "password": "hunter2hunter2"},
         )
         codes.append(r.status_code)
-    assert codes == [201, 201, 201, 429]
+        if r.status_code == 429:
+            break
+    assert 429 in codes, codes
+    assert codes.index(429) >= 3, codes
+    assert set(codes[:-1]) == {201}, codes

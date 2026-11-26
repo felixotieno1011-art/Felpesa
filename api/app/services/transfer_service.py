@@ -40,6 +40,14 @@ class WalletNotFound(TransferError):
     pass
 
 
+class SystemWalletNotAllowed(TransferError):
+    pass
+
+
+class NotWalletOwner(TransferError):
+    pass
+
+
 async def _lock_wallet(db: AsyncSession, wallet_id: uuid.UUID) -> Wallet:
     """Row-level lock. Held until the surrounding transaction commits/rolls back.
 
@@ -141,6 +149,10 @@ async def _execute_transfer(
 
         if from_w.id == to_w.id:
             raise SameWallet("Cannot transfer to self")
+        if from_w.is_system or to_w.is_system:
+            raise SystemWalletNotAllowed("System wallets cannot be used in transfers")
+        if from_w.user_id != initiated_by:
+            raise NotWalletOwner("Sender wallet does not belong to the initiating user")
         if from_w.status != "active":
             raise WalletNotActive(f"Sender wallet is {from_w.status}")
         if to_w.status != "active":

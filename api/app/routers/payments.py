@@ -67,6 +67,8 @@ async def _pay(kind, payload, user, db, redis_client, idem):
         transfer_service.SameWallet,
     ) as e:
         raise HTTPException(422, str(e))
+    except (transfer_service.SystemWalletNotAllowed, transfer_service.NotWalletOwner):
+        raise HTTPException(403, "Not allowed")
     except transfer_service.WalletNotFound:
         raise HTTPException(404, "Wallet not found")
     out = TransactionOut.model_validate(txn)

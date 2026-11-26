@@ -59,6 +59,8 @@ async def create_transfer(
             idempotency_key=idempotency_key,
             description=payload.description,
         )
+    except (transfer_service.SystemWalletNotAllowed, transfer_service.NotWalletOwner):
+        raise HTTPException(status_code=403, detail="Not allowed")
     except transfer_service.SameWallet:
         raise HTTPException(status_code=422, detail="Cannot transfer to self")
     except transfer_service.WalletNotFound:
