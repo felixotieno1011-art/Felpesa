@@ -73,3 +73,27 @@ async def stk_push(*, phone: str, amount: int, reference: str, description: str,
     if r.status_code >= 400:
         raise DarajaError(data.get("errorMessage") or f"Daraja returned HTTP {r.status_code}")
     return data
+
+
+async def stk_query(checkout_request_id: str) -> dict:
+    """Ask Safaricom for the real outcome of an STK request."""
+    s = get_settings()
+    ts = datetime.now().strftime("%Y%m%d%H%M%S")
+    password = base64.b64encode(f"{s.mpesa_shortcode}{s.mpesa_passkey}{ts}".encode()).decode()
+    payload = {
+        "BusinessShortCode": s.mpesa_shortcode,
+        "Password": password,
+        "Timestamp": ts,
+        "CheckoutRequestID": checkout_request_id,
+    }
+    async with httpx.AsyncClient(timeout=20) as client:
+        token = await _get_token(client)
+        r = await client.post(
+            f"{SANDBOX}/mpesa/stkpushquery/v1/query",
+            json=payload,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    try:
+        return r.json()
+    except ValueError:
+        raise DarajaError(f"Daraja query returned HTTP {r.status_code}")

@@ -37,6 +37,11 @@ async def _start(client, monkeypatch, token, amount=100) -> str:
 
     s = get_settings()
     monkeypatch.setattr(daraja, "stk_push", fake_stk)
+
+    async def fake_query(_ck):
+        return {"ResultCode": "0"}
+
+    monkeypatch.setattr(daraja, "stk_query", fake_query)
     monkeypatch.setattr(daraja, "is_configured", lambda: True)
     monkeypatch.setattr(s, "mpesa_callback_secret", SECRET)
     monkeypatch.setattr(s, "mpesa_callback_base_url", "https://example.test")
@@ -103,3 +108,32 @@ async def test_status_is_private_to_owner(client: AsyncClient, monkeypatch):
     checkout = await _start(client, monkeypatch, token)
     r = await client.get(f"/mpesa/status/{checkout}", headers=_bearer(other))
     assert r.status_code == 404
+
+
+async def test_unverified_callback_is_not_credited(client: AsyncClient, monkeypatch):
+    _, wallet, token = await register_user_and_wallet(client, "+254799900606")
+    checkout = await _start(client, monkeypatch, token, 100)
+
+    async def denied(_ck):
+        return {"ResultCode": "1032"}
+
+    monkeypatch.setattr(daraja, "stk_query", denied)
+    await client.post(f"/hooks/stk/{SECRET}", json=_cb(checkout))
+    assert (await _status(client, token, checkout))["status"] == "needs_review"
+    assert await _balance(wallet) == Decimal("0")
+
+
+async def test_failed_push_leaves_failed_record(client: AsyncClient, monkeypatch):
+    _, _, token = await register_user_and_wallet(client, "+254799900607")
+
+    async def boom(**kw):
+        raise daraja.DarajaError("down")
+
+    s = get_settings()
+    monkeypatch.setattr(daraja, "stk_push", boom)
+    monkeypatch.setattr(daraja, "is_configured", lambda: True)
+    monkeypatch.setattr(s, "mpesa_callback_secret", SECRET)
+    monkeypatch.setattr(s, "mpesa_callback_base_url", "https://example.test")
+    r = await client.post("/mpesa/stk", headers=_bearer(token),
+                          json={"phone": "+254708374149", "amount": 50})
+    assert r.status_code == 502

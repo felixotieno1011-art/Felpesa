@@ -20,21 +20,42 @@ async def initiate_stk(
 ) -> MpesaRequest:
     s = get_settings()
     callback_url = f"{s.mpesa_callback_base_url.rstrip('/')}/hooks/stk/{s.mpesa_callback_secret}"
-    resp = await daraja.stk_push(
-        phone=phone.lstrip("+"), amount=amount, reference="FELPESA",
-        description="Felpesa topup", callback_url=callback_url,
-    )
-    if str(resp.get("ResponseCode")) != "0" or not resp.get("CheckoutRequestID"):
-        raise StkRejected(resp.get("ResponseDescription") or "Request rejected")
-    req = MpesaRequest(
-        user_id=user.id, wallet_id=wallet.id, phone=phone, amount=Decimal(amount),
-        checkout_request_id=resp["CheckoutRequestID"],
-        merchant_request_id=resp.get("MerchantRequestID"),
-    )
+    # 1. Save the attempt first, so a crash after Safaricom accepts can never lose it.
+    req = MpesaRequest(user_id=user.id, wallet_id=wallet.id, phone=phone, amount=Decimal(amount))
     db.add(req)
     await db.commit()
     await db.refresh(req)
+    req_id = req.id
+    try:
+        resp = await daraja.stk_push(
+            phone=phone.lstrip("+"), amount=amount, reference="FELPESA",
+            description="Felpesa topup", callback_url=callback_url,
+        )
+        if str(resp.get("ResponseCode")) != "0" or not resp.get("CheckoutRequestID"):
+            raise StkRejected(resp.get("ResponseDescription") or "Request rejected")
+    except Exception as e:
+        req = await db.get(MpesaRequest, req_id)
+        req.status = "failed"
+        req.result_desc = str(e)[:255]
+        await db.commit()
+        raise
+    # 2. Record Safaricom's reference.
+    req = await db.get(MpesaRequest, req_id)
+    req.checkout_request_id = resp["CheckoutRequestID"]
+    req.merchant_request_id = resp.get("MerchantRequestID")
+    await db.commit()
+    await db.refresh(req)
     return req
+
+
+async def _verified_paid(checkout_request_id: str) -> bool:
+    """Confirm with Safaricom directly that this request was paid."""
+    try:
+        q = await daraja.stk_query(checkout_request_id)
+    except Exception:
+        log.exception("stk query failed checkout=%s", checkout_request_id)
+        return False
+    return str(q.get("ResultCode")) == "0"
 
 
 async def handle_callback(db: AsyncSession, payload: dict) -> None:
@@ -69,6 +90,12 @@ async def handle_callback(db: AsyncSession, payload: dict) -> None:
                   req.checkout_request_id, paid, req.amount)
         req.status = "needs_review"
         req.result_desc = f"Amount mismatch: paid {paid}, expected {req.amount}"
+        await db.commit()
+        return
+
+    if not await _verified_paid(req.checkout_request_id):
+        req.status = "needs_review"
+        req.result_desc = "Callback not confirmed by Safaricom query"
         await db.commit()
         return
 
