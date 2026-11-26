@@ -1,8 +1,10 @@
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
+from app.core.config import get_settings
 from app.deps import CurrentUser, SessionDep
 from app.pin_dep import require_pin
 from app.schemas.transaction import TransactionOut
@@ -11,8 +13,14 @@ from app.services import deposit_service, wallet_service
 router = APIRouter(tags=["deposits"])
 
 
+def simulated_deposits_only() -> None:
+    """Self-service deposits create money. Never expose them in production."""
+    if get_settings().app_env == "prod":
+        raise HTTPException(404, "Not found")
+
+
 class DepositRequest(BaseModel):
-    amount: float = Field(..., gt=0, description="Amount in KES")
+    amount: Decimal = Field(..., gt=0, max_digits=19, decimal_places=4, description="Amount in KES")
     currency: str = Field(..., min_length=3, max_length=3)
     description: str | None = Field(default=None, max_length=500)
 
@@ -21,7 +29,8 @@ class WithdrawalRequest(DepositRequest):
     pass
 
 
-@router.post("/deposits", response_model=TransactionOut, status_code=201)
+@router.post("/deposits", response_model=TransactionOut, status_code=201,
+             dependencies=[Depends(simulated_deposits_only)])
 async def create_deposit(
     payload: DepositRequest,
     user: CurrentUser,
