@@ -24,10 +24,11 @@ val() { echo "  → $*"; }
 
 # --- helpers ---
 req() {
-  local method="$1" path="$2" body="${3:-}" token="${4:-}" idem="${5:-}"
+  local method="$1" path="$2" body="${3:-}" token="${4:-}" idem="${5:-}" pin="${6:-}"
   local hdr=(-H "Content-Type: application/json")
   [ -n "$token" ] && hdr+=(-H "Authorization: Bearer $token")
   [ -n "$idem" ]  && hdr+=(-H "Idempotency-Key: $idem")
+  [ -n "$pin" ]   && hdr+=(-H "X-Pin: $pin")
   if [ -n "$body" ]; then
     curl -sS -X "$method" "${API}${path}" "${hdr[@]}" -d "$body"
   else
@@ -82,6 +83,14 @@ login_admin=$(req POST /auth/login "{\"phone\":\"+25479${TS: -7}3\",\"password\"
 TOKENS[admin]=$(echo "$login_admin" | jq_get "['access_token']")
 ok "admin role assigned, token refreshed"
 
+# --- 2b. set transaction PINs (required to send, pay and withdraw) ---
+say "Setting transaction PINs"
+PIN="2468"
+for name in alice bob; do
+  resp=$(req POST /pin "{\"pin\":\"$PIN\"}" "${TOKENS[$name]}")
+  echo "$resp" | grep -q '"ok":true' && ok "$name: PIN set" || { echo "set PIN failed: $resp"; exit 1; }
+done
+
 # --- 3. fund Alice and Bob via deposits ---
 say "Depositing funds (from clearing wallet — double-entry)"
 for name in alice bob; do
@@ -101,12 +110,12 @@ done
 # --- 5. Alice → Bob transfer ---
 say "Transfer: Alice → Bob (2500 KES)"
 idem="demo-transfer-$TS"
-resp=$(req POST /transfers "{\"to_wallet_id\":\"${WALLETS[bob]}\",\"amount\":2500.0,\"currency\":\"KES\",\"description\":\"demo transfer\"}" "${TOKENS[alice]}" "$idem")
+resp=$(req POST /transfers "{\"to_wallet_id\":\"${WALLETS[bob]}\",\"amount\":2500.0,\"currency\":\"KES\",\"description\":\"demo transfer\"}" "${TOKENS[alice]}" "$idem" "$PIN")
 echo "$resp" | grep -q '"status":"completed"' && ok "transfer completed" || { echo "transfer failed: $resp"; exit 1; }
 
 # --- 6. Idempotency demo: send the SAME key again ---
 say "Idempotency demo (same Idempotency-Key, no double-send)"
-resp2=$(req POST /transfers "{\"to_wallet_id\":\"${WALLETS[bob]}\",\"amount\":2500.0,\"currency\":\"KES\",\"description\":\"demo transfer\"}" "${TOKENS[alice]}" "$idem")
+resp2=$(req POST /transfers "{\"to_wallet_id\":\"${WALLETS[bob]}\",\"amount\":2500.0,\"currency\":\"KES\",\"description\":\"demo transfer\"}" "${TOKENS[alice]}" "$idem" "$PIN")
 txn_a=$(echo "$resp"  | jq_get "['id']")
 txn_b=$(echo "$resp2" | jq_get "['id']")
 if [ "$txn_a" = "$txn_b" ]; then
@@ -118,7 +127,7 @@ fi
 
 # --- 7. Bob withdraws ---
 say "Withdrawal: Bob → external (500 KES)"
-resp=$(req POST /withdrawals "{\"amount\":500.0,\"currency\":\"KES\",\"description\":\"demo withdrawal\"}" "${TOKENS[bob]}" "demo-withdraw-$TS")
+resp=$(req POST /withdrawals "{\"amount\":500.0,\"currency\":\"KES\",\"description\":\"demo withdrawal\"}" "${TOKENS[bob]}" "demo-withdraw-$TS" "$PIN")
 echo "$resp" | grep -q '"status":"completed"' && ok "withdrawal completed" || { echo "withdrawal failed: $resp"; exit 1; }
 
 # --- 8. Balances after ---
