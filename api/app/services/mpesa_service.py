@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.models import MpesaRequest, User, Wallet
+from app.payments.interfaces import CollectionRequest
+from app.payments.registry import get_provider
 from app.services import daraja, deposit_service
 
 log = logging.getLogger(__name__)
@@ -27,12 +29,12 @@ async def initiate_stk(
     await db.refresh(req)
     req_id = req.id
     try:
-        resp = await daraja.stk_push(
-            phone=phone.lstrip("+"), amount=amount, reference="FELPESA",
+        resp = await get_provider().initiate_collection(CollectionRequest(
+            phone=phone, amount=Decimal(amount), reference="FELPESA",
             description="Felpesa topup", callback_url=callback_url,
-        )
-        if str(resp.get("ResponseCode")) != "0" or not resp.get("CheckoutRequestID"):
-            raise StkRejected(resp.get("ResponseDescription") or "Request rejected")
+        ))
+        if not resp.accepted:
+            raise StkRejected(resp.message or "Request rejected")
     except (StkRejected, daraja.DarajaError) as e:
         # Safaricom answered with a clear refusal: nothing was charged.
         req = await db.get(MpesaRequest, req_id)
@@ -49,8 +51,8 @@ async def initiate_stk(
         raise
     # 2. Record Safaricom's reference.
     req = await db.get(MpesaRequest, req_id)
-    req.checkout_request_id = resp["CheckoutRequestID"]
-    req.merchant_request_id = resp.get("MerchantRequestID")
+    req.checkout_request_id = resp.provider_ref
+    req.merchant_request_id = resp.secondary_ref
     await db.commit()
     await db.refresh(req)
     return req
@@ -59,11 +61,11 @@ async def initiate_stk(
 async def _verified_paid(checkout_request_id: str) -> bool:
     """Confirm with Safaricom directly that this request was paid."""
     try:
-        q = await daraja.stk_query(checkout_request_id)
+        status = await get_provider().query_status(checkout_request_id)
     except Exception:
         log.exception("stk query failed checkout=%s", checkout_request_id)
         return False
-    return str(q.get("ResultCode")) == "0"
+    return status == "paid"
 
 
 async def handle_callback(db: AsyncSession, payload: dict) -> None:
