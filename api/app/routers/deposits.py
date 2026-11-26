@@ -8,7 +8,7 @@ from app.core.config import get_settings
 from app.deps import CurrentUser, SessionDep
 from app.pin_dep import require_pin
 from app.schemas.transaction import TransactionOut
-from app.services import deposit_service, wallet_service
+from app.services import deposit_service, wallet_service, withdrawal_service
 
 router = APIRouter(tags=["deposits"])
 
@@ -69,6 +69,18 @@ async def create_withdrawal(
     wallet = await wallet_service.get_wallet_for_user(db, user_id=user.id)
     if wallet is None:
         raise HTTPException(404, "Wallet not found")
+    if get_settings().withdrawal_mode == "provider":
+        try:
+            txn = await withdrawal_service.request_withdrawal(
+                db, user=user, wallet=wallet, amount=payload.amount,
+                currency=payload.currency.upper(), idempotency_key=idempotency_key,
+                description=payload.description,
+            )
+        except deposit_service.DepositError as e:  # also covers InsufficientFunds
+            raise HTTPException(422, str(e))
+        except deposit_service.WithdrawalError as e:
+            raise HTTPException(422, str(e))
+        return TransactionOut.model_validate(txn)
     from decimal import Decimal
     try:
         txn = await deposit_service.withdraw(

@@ -231,6 +231,7 @@ async def _withdraw(
     currency: str,
     idempotency_key: str,
     description: str | None = None,
+    pending: bool = False,
 ) -> Transaction:
     """Withdraw from a user wallet, crediting the clearing wallet.
 
@@ -310,8 +311,9 @@ async def _withdraw(
         clearing.balance = clearing_after
 
         from sqlalchemy import func as _func
-        txn.status = "completed"
-        txn.completed_at = _func.now()
+        if not pending:
+            txn.status = "completed"
+            txn.completed_at = _func.now()
 
         await db.flush()
 

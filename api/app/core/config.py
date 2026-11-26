@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     rate_limit_auth_per_min: int = 10
     require_pin: bool = True
     payment_provider: str = "daraja"
+    withdrawal_mode: str = "simulated"  # simulated | provider
     fraud_amount_threshold: int = 50_000
     fraud_rapid_window_seconds: int = 60
     fraud_rapid_max_transfers: int = 3
