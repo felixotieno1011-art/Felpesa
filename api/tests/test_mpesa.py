@@ -46,7 +46,7 @@ async def _start(client, monkeypatch, token, amount=100) -> str:
     monkeypatch.setattr(s, "mpesa_callback_secret", SECRET)
     monkeypatch.setattr(s, "mpesa_callback_base_url", "https://example.test")
     r = await client.post("/mpesa/stk", headers=_bearer(token),
-                          json={"phone": "+254712345678", "amount": amount})
+                          json={"phone": "+254708374149", "amount": amount})
     assert r.status_code == 202, r.text
     assert r.json()["checkout_request_id"] == checkout
     return checkout

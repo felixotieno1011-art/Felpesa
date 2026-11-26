@@ -1,7 +1,35 @@
 """Inbox messages. These only db.add(); the caller's commit makes them atomic with the money."""
 from decimal import Decimal
 
+import asyncio
+
+from sqlalchemy import event
+from sqlalchemy.orm import Session
+
+from app.core import live
 from app.models import Notification
+
+_tasks: set = set()
+
+
+@event.listens_for(Session, "after_commit")
+def _publish_after_commit(session) -> None:
+    users = session.info.pop("notify_users", None)
+    if not users:
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    for uid in users:
+        t = loop.create_task(live.publish(uid))
+        _tasks.add(t)
+        t.add_done_callback(_tasks.discard)
+
+
+@event.listens_for(Session, "after_rollback")
+def _drop_on_rollback(session) -> None:
+    session.info.pop("notify_users", None)
 
 
 def _ksh(x: Decimal) -> str:
@@ -9,6 +37,7 @@ def _ksh(x: Decimal) -> str:
 
 
 def add(db, user_id, kind, title, body, txn_id) -> None:
+    db.sync_session.info.setdefault("notify_users", set()).add(user_id)
     db.add(Notification(user_id=user_id, kind=kind, title=title[:80], body=body[:300],
                         transaction_id=txn_id))
 

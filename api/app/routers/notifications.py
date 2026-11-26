@@ -1,7 +1,11 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
+
+from app.core import live
+from app.core.redis import get_redis_client
 from sqlalchemy import func, select, update
 
 from app.deps import CurrentUser, SessionDep
@@ -37,6 +41,30 @@ async def list_notifications(
         .where(*_mine(user.id), Notification.is_read.is_(False))
     )
     return {"items": [_out(n) for n in rows], "unread": unread or 0}
+
+
+@router.get("/stream")
+async def stream(request: Request, user: CurrentUser) -> StreamingResponse:
+    uid = user.id
+
+    async def gen():
+        ps = get_redis_client().pubsub()
+        await ps.subscribe(live.channel(uid))
+        try:
+            yield "retry: 3000\n\n"
+            yield "data: connected\n\n"
+            while not await request.is_disconnected():
+                m = await ps.get_message(ignore_subscribe_messages=True, timeout=15)
+                yield ": ping\n\n" if m is None else "data: refresh\n\n"
+        finally:
+            await ps.unsubscribe()
+            await ps.aclose()
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/unread-count")
