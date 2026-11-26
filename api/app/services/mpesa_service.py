@@ -33,10 +33,18 @@ async def initiate_stk(
         )
         if str(resp.get("ResponseCode")) != "0" or not resp.get("CheckoutRequestID"):
             raise StkRejected(resp.get("ResponseDescription") or "Request rejected")
-    except Exception as e:
+    except (StkRejected, daraja.DarajaError) as e:
+        # Safaricom answered with a clear refusal: nothing was charged.
         req = await db.get(MpesaRequest, req_id)
         req.status = "failed"
         req.result_desc = str(e)[:255]
+        await db.commit()
+        raise
+    except Exception as e:
+        # Timeout or network error: the customer may still have paid. Keep it for review.
+        req = await db.get(MpesaRequest, req_id)
+        req.status = "needs_review"
+        req.result_desc = ("Uncertain outcome: " + str(e))[:255]
         await db.commit()
         raise
     # 2. Record Safaricom's reference.

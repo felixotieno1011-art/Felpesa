@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 
 from fastapi.responses import JSONResponse
+from redis.exceptions import RedisError
 
 from app.core.config import get_settings
 from app.services.idempotency import IdempotencyConflict
@@ -36,6 +37,11 @@ async def _idempotency_conflict(request, exc):
         status_code=409,
         content={"detail": "Idempotency-Key was already used with different parameters"},
     )
+
+
+@app.exception_handler(RedisError)
+async def _redis_down(request, exc):
+    return JSONResponse(status_code=503, content={"detail": "Service temporarily unavailable"})
 
 
 app.include_router(auth.router)
