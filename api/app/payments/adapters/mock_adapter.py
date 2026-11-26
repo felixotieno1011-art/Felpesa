@@ -9,6 +9,8 @@ from app.payments.interfaces import (
 class MockProvider(PaymentProvider):
     name = "mock"
     payout_behavior = "accept"  # accept | reject | timeout
+    payout_status = "pending"  # what query_payout reports: paid | failed | pending
+    payout_status = "pending"  # what query_payout reports: paid | failed | pending
 
     async def initiate_collection(self, req: CollectionRequest) -> CollectionResult:
         return CollectionResult(True, provider_ref="mock-" + uuid.uuid4().hex[:12])
@@ -23,3 +25,9 @@ class MockProvider(PaymentProvider):
         if b == "reject":
             return CollectionResult(False, message="mock rejected")
         return CollectionResult(True, provider_ref="mockpay-" + uuid.uuid4().hex[:10])
+
+    async def query_payout(self, reference: str) -> str:
+        return MockProvider.payout_status
+
+    async def query_payout(self, reference: str) -> str:
+        return MockProvider.payout_status

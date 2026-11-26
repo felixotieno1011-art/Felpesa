@@ -10,7 +10,7 @@ from app.core.config import get_settings
 from app.services.idempotency import IdempotencyConflict
 from app.core.db import engine
 from app.core.redis import close_redis, get_redis_client
-from app.routers import notifications, auth, audit, deposits, airtime, ledger, mpesa, payments, pin, reconciliation, transactions, transfers, wallets
+from app.routers import admin, admin, notifications, auth, audit, deposits, airtime, ledger, mpesa, payments, pin, reconciliation, transactions, transfers, wallets
 
 settings = get_settings()
 
@@ -45,6 +45,8 @@ async def _redis_down(request, exc):
 
 
 app.include_router(auth.router)
+app.include_router(admin.router)
+app.include_router(admin.router)
 app.include_router(notifications.router)
 app.include_router(wallets.router)
 app.include_router(transfers.router)

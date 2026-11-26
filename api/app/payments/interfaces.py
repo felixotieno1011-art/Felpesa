@@ -40,3 +40,11 @@ class PaymentProvider(ABC):
 
     async def initiate_payout(self, req: PayoutRequest) -> CollectionResult:
         raise NotImplementedError(f"{self.name} has no payout support yet")
+
+    async def query_payout(self, reference: str) -> str:
+        """Return 'paid', 'failed' or 'pending' for a payout we sent with this reference."""
+        raise NotImplementedError(f"{self.name} has no payout lookup yet")
+
+    async def query_payout(self, reference: str) -> str:
+        """Return 'paid', 'failed' or 'pending' for a payout we sent with this reference."""
+        raise NotImplementedError(f"{self.name} has no payout lookup yet")
