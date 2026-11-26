@@ -11,6 +11,7 @@ import Money from "./pages/Money";
 import Pin from "./pages/Pin";
 import Airtime from "./pages/Airtime";
 import Mpesa from "./pages/Mpesa";
+import More from "./pages/More";
 import PinGate from "./components/PinGate";
 import Messages from "./pages/Messages";
 import Receipt from "./pages/Receipt";
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/mpesa" element={<Mpesa />} />
         <Route path="/messages" element={<Messages />} />
         <Route path="/receipt/:id" element={<Receipt />} />
+        <Route path="/more" element={<More />} />
         <Route path="/admin" element={<Admin />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
