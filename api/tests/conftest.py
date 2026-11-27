@@ -1,6 +1,15 @@
 import os as _os
 _os.environ.setdefault("REQUIRE_PIN", "false")
 _os.environ.setdefault("RATE_LIMIT_AUTH_PER_MIN", "100000")
+
+# Force an isolated test database and Redis DB, whatever the environment says.
+import re as _re
+
+_os.environ["POSTGRES_DB"] = "felpesa_test"
+_os.environ["REDIS_URL"] = _re.sub(
+    r"/\d+$", "/15", _os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+)
+assert _os.environ["POSTGRES_DB"].endswith("_test"), "refusing to run tests on a non-test database"
 """Shared pytest fixtures for Felpesa tests.
 
 IMPORTANT: this module loads `.env.test` BEFORE importing app modules so

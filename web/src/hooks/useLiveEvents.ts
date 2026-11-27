@@ -19,7 +19,10 @@ export function useLiveEvents(token: string | null | undefined, onEvent: () => v
             headers: { Authorization: `Bearer ${token}` },
             signal: ctrl.signal,
           });
-          if (res.status === 401) return;
+          if (res.status === 401) {
+            window.dispatchEvent(new Event("felpesa-unauthorized"));
+            return;
+          }
           if (res.ok && res.body) {
             delay = 1000;
             const reader = res.body.getReader();

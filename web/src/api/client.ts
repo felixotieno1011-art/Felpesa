@@ -37,6 +37,12 @@ export async function api<T>(
       typeof body === "object" && body && "detail" in body
         ? String((body as { detail: unknown }).detail)
         : `HTTP ${res.status}`;
+    if (res.status === 401 && options.token) {
+      window.dispatchEvent(new Event("felpesa-unauthorized"));
+    }
+    if (res.status === 401 && options.token) {
+      window.dispatchEvent(new Event("felpesa-unauthorized"));
+    }
     throw new ApiError(res.status, msg, body);
   }
   return body as T;

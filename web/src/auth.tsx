@@ -26,8 +26,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const onStorage = (e: StorageEvent) => {
       if (e.key === KEY) setTokenState(e.newValue);
     };
+    const onExpired = () => setToken(null);
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    window.addEventListener("felpesa-unauthorized", onExpired);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("felpesa-unauthorized", onExpired);
+    };
   }, []);
 
   return (

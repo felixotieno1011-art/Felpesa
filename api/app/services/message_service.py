@@ -1,11 +1,15 @@
 """M-Pesa-style confirmation messages, built from transactions + ledger."""
 import uuid
+from datetime import timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import LedgerEntry, Transaction
+
+
+NAIROBI = timezone(timedelta(hours=3))  # Kenya: UTC+3, no daylight saving
 
 
 def _ksh(x: Decimal) -> str:
@@ -15,7 +19,8 @@ def _ksh(x: Decimal) -> str:
 def _text(t: Transaction, wallet_id: uuid.UUID, bal: Decimal | None) -> str:
     code = t.id.hex[:10].upper()
     amt = _ksh(t.amount)
-    when = t.created_at.strftime("%d/%m/%y at %I:%M %p")
+    created = t.created_at if t.created_at.tzinfo else t.created_at.replace(tzinfo=timezone.utc)
+    when = created.astimezone(NAIROBI).strftime("%d/%m/%y at %I:%M %p")
     tail = f" New balance {_ksh(bal)}." if bal is not None else ""
 
     if t.type in ("paybill", "buygoods"):
