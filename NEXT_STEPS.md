@@ -8,6 +8,8 @@
 - Provider interface, Daraja adapter, mock provider, `payment_attempts`
 - Pending withdrawals with once-only reversal, and a reconciliation job
 - Inbox, receipts, live updates over SSE and Redis
+- Refresh tokens in an HttpOnly cookie with rotation and reuse detection; access token in memory only
+- Scheduled payment reconciliation with a Redis lock; crash-gap retry for unsent withdrawals
 - Tests isolated on `felpesa_test` and Redis DB 15
 - Auto-logout on 401, Nairobi time in messages
 - Redesign: sidebar, bottom bar, balance card, local icons
@@ -17,10 +19,11 @@
 2. **Scheduled worker** for reconciliation. Today an admin calls the endpoint.
 3. **Crash gap.** A withdrawal debited with no payout attempt is only reported, not retried.
 4. **Pending-withdrawal wording.** The inbox still says "withdrawn" before the provider confirms.
-7. **Token storage.** Move from `localStorage` to refresh tokens in HttpOnly cookies, with revocation.
 8. **Push notifications** for closed apps (device tokens, Web Push or FCM).
 9. **Operations.** A production compose file (no `--reload`), migrations as a deploy step, a locked dependency set.
 10. **Fraud engine.** Risk scoring beyond the two current rules.
+
+12. **Cleanup.** Purge expired and revoked `refresh_tokens` rows.
 
 ## Before any real money
 - Find a licensed payment partner and get written terms (safeguarding, settlement, fees).
