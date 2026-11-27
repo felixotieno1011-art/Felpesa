@@ -1,5 +1,6 @@
 import os as _os
 _os.environ.setdefault("REQUIRE_PIN", "false")
+_os.environ["RECON_INTERVAL_SECONDS"] = "0"
 _os.environ.setdefault("RATE_LIMIT_AUTH_PER_MIN", "100000")
 
 # Force an isolated test database and Redis DB, whatever the environment says.

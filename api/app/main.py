@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -10,7 +11,8 @@ from app.core.config import get_settings
 from app.services.idempotency import IdempotencyConflict
 from app.core.db import engine
 from app.core.redis import close_redis, get_redis_client
-from app.routers import admin, admin, notifications, auth, audit, deposits, airtime, ledger, mpesa, payments, pin, reconciliation, transactions, transfers, wallets
+from app.services import recon_scheduler
+from app.routers import admin, notifications, auth, audit, deposits, airtime, ledger, mpesa, payments, pin, reconciliation, transactions, transfers, wallets
 
 settings = get_settings()
 
@@ -23,8 +25,17 @@ async def lifespan(app: FastAPI):
     # Verify Redis reachable (ping)
     redis_client = get_redis_client()
     await redis_client.ping()
+    task = None
+    if settings.recon_interval_seconds > 0:
+        task = asyncio.create_task(recon_scheduler.loop())
     yield
     # Shutdown: clean up
+    if task is not None:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
     await close_redis()
     await engine.dispose()
 
