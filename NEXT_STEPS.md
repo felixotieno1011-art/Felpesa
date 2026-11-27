@@ -8,6 +8,7 @@
 - Provider interface, Daraja adapter, mock provider, `payment_attempts`
 - Pending withdrawals with once-only reversal, and a reconciliation job
 - Inbox, receipts, live updates over SSE and Redis
+- Production compose: non-root images, migrations as a step, startup guard, pinned lock file
 - Refresh tokens in an HttpOnly cookie with rotation and reuse detection; access token in memory only
 - Scheduled payment reconciliation with a Redis lock; crash-gap retry for unsent withdrawals
 - Tests isolated on `felpesa_test` and Redis DB 15
@@ -24,6 +25,8 @@
 10. **Fraud engine.** Risk scoring beyond the two current rules.
 
 12. **Cleanup.** Purge expired and revoked `refresh_tokens` rows.
+
+13. **Production hardening still open:** TLS in front of nginx (the refresh cookie is Secure), database backups, log shipping and monitoring, container resource limits.
 
 ## Before any real money
 - Find a licensed payment partner and get written terms (safeguarding, settlement, fees).
