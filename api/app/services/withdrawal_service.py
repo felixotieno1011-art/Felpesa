@@ -83,6 +83,7 @@ async def settle_payout(db: AsyncSession, attempt_id: uuid.UUID, *, success: boo
         txn.completed_at = func.now()
         await audit(db, actor_id=txn.initiated_by, action="withdrawal.confirmed",
                     entity_type="transaction", entity_id=txn.id, metadata={})
+        notification_service.after_payout_confirmed(db, txn=txn)
         await db.commit()
         return
 

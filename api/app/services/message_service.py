@@ -34,7 +34,10 @@ def _text(t: Transaction, wallet_id: uuid.UUID, bal: Decimal | None) -> str:
     elif t.type == "deposit":
         body = f"{amt} deposited to your wallet"
     elif t.type == "withdrawal":
-        body = f"{amt} withdrawn from your wallet"
+        if getattr(t, "status", None) == "pending":
+            body = f"{amt} withdrawal is being processed"
+        else:
+            body = f"{amt} withdrawn from your wallet"
     elif t.from_wallet_id == wallet_id:
         body = f"{amt} sent to wallet ...{str(t.to_wallet_id)[-6:]}"
     else:

@@ -63,5 +63,14 @@ def after_cash(db, *, txn, user_id, balance_after) -> None:
         add(db, user_id, "deposit", "Deposit received",
             f"{amt} added to your wallet. New balance {_ksh(balance_after)}.", txn.id)
     else:
-        add(db, user_id, "withdrawal", "Withdrawal",
-            f"{amt} withdrawn. New balance {_ksh(balance_after)}.", txn.id)
+        if txn.status == "pending":
+            add(db, user_id, "withdrawal", "Withdrawal processing",
+                f"{amt} withdrawal is being processed. New balance {_ksh(balance_after)}.", txn.id)
+        else:
+            add(db, user_id, "withdrawal", "Withdrawal",
+                f"{amt} withdrawn. New balance {_ksh(balance_after)}.", txn.id)
+
+
+def after_payout_confirmed(db, *, txn) -> None:
+    add(db, txn.initiated_by, "withdrawal", "Withdrawal sent",
+        f"{_ksh(txn.amount)} has been sent to your phone.", txn.id)
