@@ -116,5 +116,10 @@ async def run_reconciliation(db: AsyncSession, min_age_seconds: int = 300) -> di
         fn = reconcile_collection if kind == "collection" else reconcile_payout
         outcome = await fn(db, att_id)
         counts[f"{kind}:{outcome}"] = counts.get(f"{kind}:{outcome}", 0) + 1
+    unsent = await find_unattempted_withdrawals(db, min_age_seconds)
+    retried: dict[str, int] = {}
+    for tid in unsent:
+        outcome = await withdrawal_service.retry_unsent_withdrawal(db, uuid.UUID(tid))
+        retried[outcome] = retried.get(outcome, 0) + 1
     return {"checked": len(rows), "outcomes": counts,
-            "withdrawals_without_payout": await find_unattempted_withdrawals(db, min_age_seconds)}
+            "withdrawals_without_payout": unsent, "withdrawals_retried": retried}

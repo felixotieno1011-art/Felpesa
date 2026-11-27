@@ -3,16 +3,59 @@ import logging
 import uuid
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audit
-from app.models import LedgerEntry, MpesaRequest, Transaction
+from app.models import LedgerEntry, MpesaRequest, Transaction, User
 from app.payments.interfaces import PayoutRequest
 from app.payments.registry import get_provider
 from app.services import deposit_service, notification_service
 from app.services.deposit_service import _lock_clearing_wallet, _lock_user_wallet
 
 log = logging.getLogger(__name__)
+
+
+async def _claim_attempt(db: AsyncSession, *, txn_id, user_id, wallet_id, provider_name,
+                         phone, amount) -> uuid.UUID | None:
+    """Write the payout attempt BEFORE calling the provider. None = someone already claimed it."""
+    existing = await db.scalar(select(MpesaRequest.id).where(
+        MpesaRequest.transaction_id == txn_id, MpesaRequest.kind == "payout"))
+    if existing is not None:
+        await db.rollback()
+        return None
+    attempt_id = uuid.uuid4()
+    db.add(MpesaRequest(id=attempt_id, user_id=user_id, wallet_id=wallet_id,
+                        provider=provider_name, kind="payout", phone=phone,
+                        amount=amount, transaction_id=txn_id))
+    try:
+        await db.commit()
+    except IntegrityError:  # unique (transaction_id, kind): a concurrent claim won
+        await db.rollback()
+        return None
+    return attempt_id
+
+
+async def _send_payout(db: AsyncSession, provider, attempt_id, phone, amount) -> None:
+    try:
+        res = await provider.initiate_payout(
+            PayoutRequest(phone=phone, amount=amount, reference=str(attempt_id)[:12]))
+    except NotImplementedError as e:
+        await settle_payout(db, attempt_id, success=False, reason=str(e))
+        return
+    except Exception as e:
+        # Timeout or network error: the customer may already have been paid. Never auto-reverse.
+        a = await db.get(MpesaRequest, attempt_id)
+        a.status = "needs_review"
+        a.result_desc = ("Uncertain outcome: " + str(e))[:255]
+        await db.commit()
+        return
+    if not res.accepted:
+        await settle_payout(db, attempt_id, success=False, reason=res.message)
+    else:
+        a = await db.get(MpesaRequest, attempt_id)
+        a.checkout_request_id = res.provider_ref
+        await db.commit()
 
 
 async def request_withdrawal(db: AsyncSession, *, user, wallet, amount, currency,
@@ -25,39 +68,34 @@ async def request_withdrawal(db: AsyncSession, *, user, wallet, amount, currency
     if txn.status != "pending":
         return txn
     txn_id = txn.id
-    existing = await db.scalar(select(MpesaRequest).where(
-        MpesaRequest.transaction_id == txn_id, MpesaRequest.kind == "payout"))
-    if existing is not None:
-        return txn  # replay: the payout was already sent
-
     provider = get_provider()
-    attempt = MpesaRequest(user_id=user.id, wallet_id=wallet.id, provider=provider.name,
-                           kind="payout", phone=phone, amount=amount, transaction_id=txn_id)
-    db.add(attempt)
-    await db.commit()
-    await db.refresh(attempt)
-    attempt_id = attempt.id
-    try:
-        res = await provider.initiate_payout(
-            PayoutRequest(phone=phone, amount=amount, reference=str(attempt_id)[:12]))
-    except NotImplementedError as e:
-        await settle_payout(db, attempt_id, success=False, reason=str(e))
-        return await db.get(Transaction, txn_id)
-    except Exception as e:
-        # Timeout or network error: the customer may already have been paid. Never auto-reverse.
-        a = await db.get(MpesaRequest, attempt_id)
-        a.status = "needs_review"
-        a.result_desc = ("Uncertain outcome: " + str(e))[:255]
-        await db.commit()
-        return await db.get(Transaction, txn_id)
-
-    if not res.accepted:
-        await settle_payout(db, attempt_id, success=False, reason=res.message)
-    else:
-        a = await db.get(MpesaRequest, attempt_id)
-        a.checkout_request_id = res.provider_ref
-        await db.commit()
+    attempt_id = await _claim_attempt(
+        db, txn_id=txn_id, user_id=user.id, wallet_id=wallet.id,
+        provider_name=provider.name, phone=phone, amount=amount)
+    if attempt_id is None:
+        return await db.get(Transaction, txn_id)  # reload: rollback expired txn
+    await _send_payout(db, provider, attempt_id, phone, amount)
     return await db.get(Transaction, txn_id)
+
+
+async def retry_unsent_withdrawal(db: AsyncSession, txn_id: uuid.UUID) -> str:
+    """Crash gap: a pending withdrawal with no attempt. Claims it, then sends exactly once."""
+    txn = await db.scalar(
+        select(Transaction).where(Transaction.id == txn_id)
+        .with_for_update().execution_options(populate_existing=True))
+    if txn is None or txn.type != "withdrawal" or txn.status != "pending":
+        await db.rollback()
+        return "skipped"
+    user = await db.get(User, txn.initiated_by)
+    user_id, wallet_id, amount, phone = txn.initiated_by, txn.from_wallet_id, txn.amount, user.phone
+    provider = get_provider()
+    attempt_id = await _claim_attempt(
+        db, txn_id=txn_id, user_id=user_id, wallet_id=wallet_id,
+        provider_name=provider.name, phone=phone, amount=amount)
+    if attempt_id is None:
+        return "skipped"
+    await _send_payout(db, provider, attempt_id, phone, amount)
+    return "sent"
 
 
 async def settle_payout(db: AsyncSession, attempt_id: uuid.UUID, *, success: bool,

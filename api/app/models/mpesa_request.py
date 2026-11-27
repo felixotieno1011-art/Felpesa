@@ -21,6 +21,8 @@ class MpesaRequest(Base):
     __table_args__ = (
         UniqueConstraint("provider_ref", name="uq_payment_attempts_provider_ref"),
         Index("ix_payment_attempts_user_id", "user_id"),
+        Index("uq_payment_attempts_txn_kind", "transaction_id", "kind", unique=True,
+              postgresql_where=text("transaction_id IS NOT NULL")),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
