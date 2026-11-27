@@ -10,6 +10,31 @@ export class ApiError extends Error {
   }
 }
 
+let memoryToken: string | null = null;
+let refreshing: Promise<string | null> | null = null;
+
+export function setMemoryToken(t: string | null) {
+  memoryToken = t;
+}
+
+/** One shared in-flight refresh, so parallel callers never replay the same cookie. */
+export function refreshAccessToken(): Promise<string | null> {
+  if (!refreshing) {
+    refreshing = fetch(`${BASE}/auth/refresh`, { method: "POST", credentials: "include" })
+      .then(async (r) => {
+        if (!r.ok) return null;
+        const j = (await r.json()) as { access_token: string };
+        memoryToken = j.access_token;
+        return j.access_token;
+      })
+      .catch(() => null)
+      .finally(() => {
+        refreshing = null;
+      });
+  }
+  return refreshing;
+}
+
 export async function api<T>(
   path: string,
   options: RequestInit & { token?: string | null } = {}
@@ -20,7 +45,15 @@ export async function api<T>(
   };
   if (options.token) headers["Authorization"] = `Bearer ${options.token}`;
 
-  const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  let res = await fetch(`${BASE}${path}`, { ...options, headers, credentials: "include" });
+  if (res.status === 401 && options.token && !path.startsWith("/auth/")) {
+    const fresh = await refreshAccessToken();
+    if (fresh) {
+      window.dispatchEvent(new CustomEvent("felpesa-token", { detail: fresh }));
+      headers["Authorization"] = `Bearer ${fresh}`;
+      res = await fetch(`${BASE}${path}`, { ...options, headers, credentials: "include" });
+    }
+  }
 
   let body: unknown = null;
   const text = await res.text();

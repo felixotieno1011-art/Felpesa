@@ -17,7 +17,8 @@ import Messages from "./pages/Messages";
 import Receipt from "./pages/Receipt";
 
 function Protected({ children }: { children: JSX.Element }) {
-  const { token } = useAuth();
+  const { token, ready } = useAuth();
+  if (!ready) return <div className="auth-page"><p className="muted">Loading...</p></div>;
   if (!token) return <Navigate to="/login" replace />;
   return children;
 }
