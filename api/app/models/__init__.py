@@ -24,3 +24,4 @@ from app.models.merchant import Merchant  # noqa: F401
 from app.models.mpesa_request import MpesaRequest  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
+from app.models.refresh_token import RefreshToken  # noqa: F401
