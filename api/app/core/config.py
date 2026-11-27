@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -58,6 +58,23 @@ class Settings(BaseSettings):
     mpesa_passkey: str = ""
     mpesa_callback_base_url: str = ""
     mpesa_callback_secret: str = ""
+
+    @model_validator(mode="after")
+    def _prod_guard(self):
+        if self.app_env != "prod":
+            return self
+        bad = []
+        if self.postgres_password in {"", "felpesa_dev", "password", "postgres"}:
+            bad.append("POSTGRES_PASSWORD is empty or a known default")
+        if not self.require_pin:
+            bad.append("REQUIRE_PIN must be true")
+        if self.withdrawal_mode == "simulated":
+            bad.append("WITHDRAWAL_MODE=simulated is not allowed")
+        if self.payment_provider == "mock":
+            bad.append("PAYMENT_PROVIDER=mock is not allowed")
+        if bad:
+            raise ValueError("Unsafe production config: " + "; ".join(bad))
+        return self
 
     @property
     def database_url(self) -> str:
