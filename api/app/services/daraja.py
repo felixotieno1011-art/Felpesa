@@ -2,6 +2,7 @@
 import base64
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -34,7 +35,7 @@ async def _get_token(client: httpx.AsyncClient) -> str:
         auth=(s.mpesa_consumer_key, s.mpesa_consumer_secret),
     )
     if r.status_code != 200:
-        raise DarajaError("Could not authenticate with Daraja (check key/secret)")
+        raise DarajaError(f"Daraja auth failed ({r.status_code}): {r.text[:200]}")
     data = r.json()
     _token = (data["access_token"], time.monotonic() + int(data.get("expires_in", 3599)) - 60)
     return _token[0]
@@ -44,7 +45,7 @@ async def stk_push(*, phone: str, amount: int, reference: str, description: str,
                    callback_url: str) -> dict:
     """phone must be 2547XXXXXXXX (no +). amount must be a whole number."""
     s = get_settings()
-    ts = datetime.now().strftime("%Y%m%d%H%M%S")
+    ts = datetime.now(ZoneInfo("Africa/Nairobi")).strftime("%Y%m%d%H%M%S")
     password = base64.b64encode(f"{s.mpesa_shortcode}{s.mpesa_passkey}{ts}".encode()).decode()
     payload = {
         "BusinessShortCode": s.mpesa_shortcode,
@@ -78,7 +79,7 @@ async def stk_push(*, phone: str, amount: int, reference: str, description: str,
 async def stk_query(checkout_request_id: str) -> dict:
     """Ask Safaricom for the real outcome of an STK request."""
     s = get_settings()
-    ts = datetime.now().strftime("%Y%m%d%H%M%S")
+    ts = datetime.now(ZoneInfo("Africa/Nairobi")).strftime("%Y%m%d%H%M%S")
     password = base64.b64encode(f"{s.mpesa_shortcode}{s.mpesa_passkey}{ts}".encode()).decode()
     payload = {
         "BusinessShortCode": s.mpesa_shortcode,

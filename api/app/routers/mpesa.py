@@ -29,10 +29,6 @@ class StkIn(BaseModel):
 async def stk(payload: StkIn, user: CurrentUser, db: SessionDep, redis_client: RedisDep) -> dict:
     if not daraja.is_configured():
         raise HTTPException(503, "M-Pesa is not configured")
-    if payload.phone != "+254708374149":
-        raise HTTPException(
-            422, "Sandbox: only the Daraja test number +254708374149 is allowed"
-        )
     try:
         await check_rate_limit(redis_client, scope="stk", identity=user.id, limit=3)
     except RateLimitExceeded as e:

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from decimal import Decimal
 
@@ -15,6 +16,29 @@ log = logging.getLogger(__name__)
 
 class StkRejected(Exception):
     pass
+
+
+
+async def _auto_complete_mock(checkout_request_id: str, phone: str, amount: Decimal) -> None:
+    await asyncio.sleep(2)
+    from app.core.db import SessionLocal
+    async with SessionLocal() as db:
+        await handle_callback(db, {
+            "Body": {
+                "stkCallback": {
+                    "CheckoutRequestID": checkout_request_id,
+                    "ResultCode": 0,
+                    "ResultDesc": "The service request is processed successfully.",
+                    "CallbackMetadata": {
+                        "Item": [
+                            {"Name": "Amount", "Value": float(amount)},
+                            {"Name": "MpesaReceiptNumber", "Value": "SBX" + checkout_request_id[-7:].upper()},
+                            {"Name": "PhoneNumber", "Value": int(phone.lstrip("+"))},
+                        ]
+                    },
+                }
+            }
+        })
 
 
 async def initiate_stk(
@@ -55,6 +79,8 @@ async def initiate_stk(
     req.merchant_request_id = resp.secondary_ref
     await db.commit()
     await db.refresh(req)
+    if s.payment_provider == "mock" and req.checkout_request_id:
+        asyncio.create_task(_auto_complete_mock(req.checkout_request_id, phone, req.amount))
     return req
 
 

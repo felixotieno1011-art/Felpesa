@@ -57,7 +57,6 @@ async def _redis_down(request, exc):
 
 app.include_router(auth.router)
 app.include_router(admin.router)
-app.include_router(admin.router)
 app.include_router(notifications.router)
 app.include_router(wallets.router)
 app.include_router(transfers.router)
